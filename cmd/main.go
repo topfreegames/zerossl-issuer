@@ -37,8 +37,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	zerosslv1alpha1 "github.com/ronnansouza/zerossl-issuer/api/v1alpha1"
-	"github.com/ronnansouza/zerossl-issuer/internal/controller"
+	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
+	"github.com/topfreegames/zerossl-issuer/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

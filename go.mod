@@ -1,4 +1,4 @@
-module github.com/ronnansouza/zerossl-issuer
+module github.com/topfreegames/zerossl-issuer
 
 go 1.24.0
 

@@ -9,7 +9,7 @@ The ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSS
 ## Project Structure
 
 - **Domain**: zerossl.cert-manager.io
-- **Repository**: github.com/ronnansouza/zerossl-issuer
+- **Repository**: github.com/topfreegames/zerossl-issuer
 - **Framework**: Kubebuilder with Go modules for dependency management
 
 ## Core Components

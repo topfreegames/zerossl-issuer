@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	zerosslv1alpha1 "github.com/ronnansouza/zerossl-issuer/api/v1alpha1"
+	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
 )
 
 var _ = Describe("Issuer Controller", func() {

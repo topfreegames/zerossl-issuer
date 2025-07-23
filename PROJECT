@@ -7,7 +7,7 @@ domain: zerossl.dev
 layout:
 - go.kubebuilder.io/v4
 projectName: zerossl-issuer
-repo: github.com/ronnansouza/zerossl-issuer
+repo: github.com/topfreegames/zerossl-issuer
 resources:
 - api:
     crdVersion: v1
@@ -16,6 +16,6 @@ resources:
   domain: zerossl.dev
   group: zerossl
   kind: Issuer
-  path: github.com/ronnansouza/zerossl-issuer/api/v1alpha1
+  path: github.com/topfreegames/zerossl-issuer/api/v1alpha1
   version: v1alpha1
 version: "3"

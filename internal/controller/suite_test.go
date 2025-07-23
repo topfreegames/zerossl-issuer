@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	zerosslv1alpha1 "github.com/ronnansouza/zerossl-issuer/api/v1alpha1"
+	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

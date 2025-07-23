@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	zerosslv1alpha1 "github.com/ronnansouza/zerossl-issuer/api/v1alpha1"
+	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
 )
 
 // IssuerReconciler reconciles a Issuer object

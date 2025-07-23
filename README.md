@@ -85,7 +85,7 @@ spec:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ronnansouza/zerossl-issuer.git
+   git clone https://github.com/topfreegames/zerossl-issuer.git
    cd zerossl-issuer
    ```
 
