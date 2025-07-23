@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- zerossl_v1alpha1_issuer.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
