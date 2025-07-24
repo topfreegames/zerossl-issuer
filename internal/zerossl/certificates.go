@@ -57,7 +57,11 @@ func (c *Client) CreateCertificate(req *CertificateRequest) (*CertificateRespons
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %v", cerr)
+		}
+	}()
 
 	if err := handleResponse(resp); err != nil {
 		return nil, err
@@ -80,7 +84,11 @@ func (c *Client) GetCertificate(id string) (*CertificateResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get certificate: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %v", cerr)
+		}
+	}()
 
 	if err := handleResponse(resp); err != nil {
 		return nil, err

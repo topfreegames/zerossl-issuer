@@ -35,7 +35,11 @@ func (c *Client) ValidateAPIKey() error {
 	if err != nil {
 		return fmt.Errorf("failed to validate API key: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

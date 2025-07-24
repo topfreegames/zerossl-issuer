@@ -43,29 +43,29 @@ type IssuerReconciler struct {
 
 // Reconcile handles the reconciliation loop for ZeroSSL issuers
 func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-	log.Info("Reconciling ZeroSSL issuer", "namespace", req.Namespace, "name", req.Name)
+	logger := log.FromContext(ctx)
+	logger.Info("Reconciling ZeroSSL issuer", "namespace", req.Namespace, "name", req.Name)
 
 	// Get the Issuer resource
 	issuer := &zerosslv1alpha1.Issuer{}
 	if err := r.Get(ctx, req.NamespacedName, issuer); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("Issuer resource not found, ignoring since object must be deleted")
+			logger.Info("Issuer resource not found, ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "Failed to get Issuer")
+		logger.Error(err, "Failed to get Issuer")
 		return ctrl.Result{}, fmt.Errorf("failed to get issuer: %v", err)
 	}
 
 	// Initialize the status if it's nil
 	if issuer.Status.Conditions == nil {
-		log.Info("Initializing issuer status conditions")
+		logger.Info("Initializing issuer status conditions")
 		issuer.Status.Conditions = []metav1.Condition{}
 	}
 
 	// Validate the issuer configuration
 	if err := r.validateIssuer(issuer); err != nil {
-		log.Error(err, "Failed to validate issuer configuration")
+		logger.Error(err, "Failed to validate issuer configuration")
 		// Update the Ready condition
 		meta.SetStatusCondition(&issuer.Status.Conditions, metav1.Condition{
 			Type:               "Ready",
@@ -76,7 +76,7 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		})
 
 		if err := r.Status().Update(ctx, issuer); err != nil {
-			log.Error(err, "Failed to update issuer status")
+			logger.Error(err, "Failed to update issuer status")
 			return ctrl.Result{}, fmt.Errorf("failed to update issuer status: %v", err)
 		}
 
@@ -84,7 +84,7 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Update the Ready condition to true
-	log.Info("Issuer configuration validated successfully")
+	logger.Info("Issuer configuration validated successfully")
 	meta.SetStatusCondition(&issuer.Status.Conditions, metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,
@@ -94,11 +94,11 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	})
 
 	if err := r.Status().Update(ctx, issuer); err != nil {
-		log.Error(err, "Failed to update issuer status")
+		logger.Error(err, "Failed to update issuer status")
 		return ctrl.Result{}, fmt.Errorf("failed to update issuer status: %v", err)
 	}
 
-	log.Info("Reconciliation completed successfully")
+	logger.Info("Reconciliation completed successfully")
 	return ctrl.Result{}, nil
 }
 
