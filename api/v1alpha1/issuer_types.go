@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,9 +26,9 @@ import (
 
 // IssuerSpec defines the desired state of Issuer
 type IssuerSpec struct {
-	// APIKey is the ZeroSSL API key used for authentication
+	// APIKeySecretRef is a reference to a secret containing the ZeroSSL API key
 	// +required
-	APIKey string `json:"apiKey"`
+	APIKeySecretRef corev1.SecretKeySelector `json:"apiKeySecretRef"`
 
 	// ValidityDays is the number of days the certificate should be valid for
 	// +optional

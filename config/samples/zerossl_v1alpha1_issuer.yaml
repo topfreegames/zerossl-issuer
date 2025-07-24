@@ -1,9 +1,22 @@
-apiVersion: zerossl.zerossl.dev/v1alpha1
+apiVersion: zerossl.cert-manager.io/v1alpha1
 kind: Issuer
 metadata:
-  labels:
-    app.kubernetes.io/name: zerossl-issuer
-    app.kubernetes.io/managed-by: kustomize
   name: issuer-sample
 spec:
-  # TODO(user): Add fields here
+  # Reference to a secret containing the ZeroSSL API key
+  apiKeySecretRef:
+    name: zerossl-api-key
+    key: api-key
+  # Optional: Number of days the certificate should be valid for (default: 90)
+  validityDays: 90
+  # Optional: Enable strict domain validation (default: true)
+  strictDomains: true
+---
+# Example secret containing the ZeroSSL API key
+apiVersion: v1
+kind: Secret
+metadata:
+  name: zerossl-api-key
+type: Opaque
+stringData:
+  api-key: "your-api-key-here"

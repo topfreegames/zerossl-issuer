@@ -1,152 +1,92 @@
 # ZeroSSL Issuer Project Rules
 
-## Project Structure
-- Follow Kubebuilder project layout conventions
-- Keep core logic in internal/ directory
-- Use api/v1alpha1/ for API definitions
-- Place tests alongside the code they test
-- Use config/ for all Kubernetes manifests
-- Store e2e tests in test/e2e/
+## Development Process
 
-## Development Patterns
-
-### API Design
-- Follow cert-manager external issuer API conventions
-- Use v1alpha1 for initial API version
-- Include comprehensive CRD validation
-- Document all API fields with kubebuilder markers
-- Keep Issuer spec focused on ZeroSSL-specific fields
-
-### Controller Implementation
-- Use controller-runtime best practices
-- Implement proper error handling and retries
-- Follow cert-manager's reconciliation patterns
-- Use conditions to report status
-- Generate events for significant state changes
+### Code Changes
+1. Review existing code and tests before making changes
+2. Follow project structure and patterns
+3. Keep changes focused and minimal
+4. Document changes in code and commit messages
+5. Update API documentation when changing CRDs
 
 ### Testing Requirements
-- Write unit tests for all packages
-- Include integration tests for controllers
-- Implement e2e tests using Kind clusters
-- Test with cert-manager installed
-- Use Ginkgo/Gomega for testing
+1. ALWAYS review and update tests after code changes:
+   - Unit tests in the same package
+   - Integration tests if controller logic changes
+   - E2E tests for full workflow changes
+   - Sample manifests for new features
+2. Test coverage requirements:
+   - Unit tests for all new functions
+   - Integration tests for controller changes
+   - E2E tests for user workflows
+3. Test quality checklist:
+   - Tests are descriptive and well-organized
+   - Edge cases are covered
+   - Error conditions are tested
+   - Resource cleanup is handled
+   - Secrets and sensitive data are properly managed
+
+### Code Review Process
+1. Self-review checklist:
+   - Code follows project patterns
+   - Tests are comprehensive
+   - Documentation is updated
+   - CRDs are regenerated if needed
+   - Samples are updated
+2. Testing verification:
+   - All tests pass locally
+   - Coverage is maintained or improved
+   - New features have example tests
+   - Security considerations are tested
+
+## Project Standards
+
+### API Design
+1. Follow cert-manager patterns
+2. Use proper validation
+3. Document all fields
+4. Handle versioning properly
 
 ### Security Practices
-- Run containers as non-root
-- Use distroless base images
-- Implement proper RBAC
-- Keep secrets in same namespace as Issuer
-- Follow Pod Security Standards
+1. No sensitive data in specs
+2. Use secret references
+3. Validate secret access
+4. Follow RBAC best practices
 
-### Code Style
-- Follow Go best practices
-- Use golangci-lint for code quality
-- Keep functions focused and small
-- Document public APIs
-- Use meaningful variable names
+### Controller Implementation
+1. Proper error handling
+2. Status updates
+3. Event recording
+4. Resource cleanup
 
-## Build and Deployment
+### Documentation
+1. Keep README current
+2. Document API changes
+3. Update examples
+4. Include troubleshooting
 
-### Make Targets
-- Use make for build automation
-- Include common targets:
-  - build
-  - test
-  - docker-build
-  - deploy
-  - generate
-  - manifests
+## Testing Guidelines
 
-### Container Images
-- Build multi-arch images
-- Use minimal base images
-- Include version tags
-- Set resource limits
-- Configure security context
+### Unit Tests
+1. Test package functionality
+2. Mock external dependencies
+3. Cover error cases
+4. Validate input/output
 
-### Resource Management
-- Use Kustomize for deployment
-- Keep base resources separate
-- Include namespace configuration
-- Configure RBAC properly
-- Set resource requests/limits
+### Integration Tests
+1. Test controller logic
+2. Verify reconciliation
+3. Test with real resources
+4. Handle cleanup
 
-## Error Handling
+### E2E Tests
+1. Test full workflows
+2. Verify metrics
+3. Test with real cluster
+4. Clean up resources
 
-### Controller Errors
-- Differentiate between temporary and permanent errors
-- Use proper error wrapping
-- Include context in error messages
-- Set appropriate conditions
-- Generate relevant events
-
-### API Client Errors
-- Handle ZeroSSL API errors gracefully
-- Implement proper retries
-- Use exponential backoff
-- Log meaningful error messages
-- Update status conditions
-
-## Monitoring and Observability
-
-### Metrics
-- Expose Prometheus metrics
-- Include controller-specific metrics
-- Monitor reconciliation success/failure
-- Track API call latencies
-- Measure certificate operations
-
-### Logging
-- Use structured logging
-- Include request IDs
-- Log at appropriate levels
-- Include relevant context
-- Follow logging best practices
-
-## Documentation
-
-### Code Documentation
-- Document all exported types
-- Include examples in godoc
-- Explain complex logic
-- Document assumptions
-- Keep comments up to date
-
-### User Documentation
-- Provide clear installation instructions
-- Include configuration examples
-- Document troubleshooting steps
-- Explain error conditions
-- Keep README current
-
-## Version Control
-
-### Commit Messages
-- Write descriptive commit messages
-- Reference issues/PRs
-- Keep commits focused
-- Follow conventional commits
-- Include context when needed
-
-### Branch Management
-- Use feature branches
-- Keep main branch stable
-- Tag releases properly
-- Follow semver
-- Document breaking changes
-
-## Dependencies
-
-### Go Dependencies
-- Use go modules
-- Pin dependency versions
-- Regularly update dependencies
-- Audit security vulnerabilities
-- Document version constraints
-
-### Kubernetes Dependencies
-- Support multiple K8s versions
-- Test against supported versions
-- Use appropriate API versions
-- Follow deprecation policies
-- Document compatibility 
+### Test Maintenance
+1. Keep tests current
+2. Remove obsolete tests
+3. Update for API changes
+4. Maintain test documentation 

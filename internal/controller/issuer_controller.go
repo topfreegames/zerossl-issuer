@@ -20,15 +20,18 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
+	"github.com/topfreegames/zerossl-issuer/internal/zerossl"
 )
 
 // IssuerReconciler reconciles a Issuer object
@@ -40,6 +43,7 @@ type IssuerReconciler struct {
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile handles the reconciliation loop for ZeroSSL issuers
 func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -104,8 +108,34 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 // validateIssuer validates the issuer configuration
 func (r *IssuerReconciler) validateIssuer(issuer *zerosslv1alpha1.Issuer) error {
-	if issuer.Spec.APIKey == "" {
-		return fmt.Errorf("apiKey is required")
+	// Get the secret containing the API key
+	secret := &corev1.Secret{}
+	secretName := types.NamespacedName{
+		Namespace: issuer.Namespace,
+		Name:      issuer.Spec.APIKeySecretRef.Name,
+	}
+
+	if err := r.Get(context.Background(), secretName, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("secret %s/%s not found", secretName.Namespace, secretName.Name)
+		}
+		return fmt.Errorf("failed to get secret %s/%s: %v", secretName.Namespace, secretName.Name, err)
+	}
+
+	// Get the API key from the secret
+	apiKey, ok := secret.Data[issuer.Spec.APIKeySecretRef.Key]
+	if !ok {
+		return fmt.Errorf("key %s not found in secret %s/%s", issuer.Spec.APIKeySecretRef.Key, secretName.Namespace, secretName.Name)
+	}
+
+	if len(apiKey) == 0 {
+		return fmt.Errorf("apiKey in secret %s/%s is empty", secretName.Namespace, secretName.Name)
+	}
+
+	// Validate the API key by making a test request
+	client := zerossl.NewClient(string(apiKey))
+	if err := client.ValidateAPIKey(); err != nil {
+		return fmt.Errorf("invalid API key: %v", err)
 	}
 
 	if issuer.Spec.ValidityDays < 1 || issuer.Spec.ValidityDays > 365 {

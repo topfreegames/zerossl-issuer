@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,6 +33,8 @@ import (
 var _ = Describe("Issuer Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const secretName = "test-secret"
+		const apiKeyValue = "test-api-key"
 
 		ctx := context.Background()
 
@@ -40,26 +43,44 @@ var _ = Describe("Issuer Controller", func() {
 			Namespace: "default",
 		}
 
+		secretNamespacedName := types.NamespacedName{
+			Name:      secretName,
+			Namespace: "default",
+		}
+
 		BeforeEach(func() {
-			// Delete any existing test resource
+			// Delete any existing test resources
 			existing := &zerosslv1alpha1.Issuer{}
 			err := k8sClient.Get(ctx, typeNamespacedName, existing)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, existing)).To(Succeed())
 			}
-		})
 
-		AfterEach(func() {
-			resource := &zerosslv1alpha1.Issuer{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			existingSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, secretNamespacedName, existingSecret)
 			if err == nil {
-				By("Cleanup the specific resource instance Issuer")
-				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, existingSecret)).To(Succeed())
 			}
 		})
 
-		It("should fail reconciliation when apiKey is missing", func() {
-			By("Creating an issuer without an API key")
+		AfterEach(func() {
+			// Cleanup issuer
+			resource := &zerosslv1alpha1.Issuer{}
+			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			}
+
+			// Cleanup secret
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, secretNamespacedName, secret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+			}
+		})
+
+		It("should fail reconciliation when secret reference is missing", func() {
+			By("Creating an issuer without a secret reference")
 			issuer := &zerosslv1alpha1.Issuer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -81,7 +102,7 @@ var _ = Describe("Issuer Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("apiKey is required"))
+			Expect(err.Error()).To(ContainSubstring("secret default/test-secret not found"))
 
 			// Check that the status condition was updated
 			updatedIssuer := &zerosslv1alpha1.Issuer{}
@@ -92,7 +113,63 @@ var _ = Describe("Issuer Controller", func() {
 			Expect(condition.Reason).To(Equal("ValidationFailed"))
 		})
 
+		It("should fail reconciliation when secret key is missing", func() {
+			By("Creating a secret without the required key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"wrong-key": []byte(apiKeyValue),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+			By("Creating an issuer referencing the secret")
+			issuer := &zerosslv1alpha1.Issuer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: zerosslv1alpha1.IssuerSpec{
+					APIKeySecretRef: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: secretName,
+						},
+						Key: "api-key",
+					},
+					ValidityDays: 90,
+				},
+			}
+			Expect(k8sClient.Create(ctx, issuer)).To(Succeed())
+
+			By("Reconciling the created resource")
+			reconciler := &IssuerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("key api-key not found in secret"))
+		})
+
 		It("should fail reconciliation when validityDays is invalid", func() {
+			By("Creating a secret with the API key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"api-key": []byte(apiKeyValue),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
 			By("Creating an issuer with invalid validityDays")
 			issuer := &zerosslv1alpha1.Issuer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -100,7 +177,12 @@ var _ = Describe("Issuer Controller", func() {
 					Namespace: "default",
 				},
 				Spec: zerosslv1alpha1.IssuerSpec{
-					APIKey:       "test-api-key",
+					APIKeySecretRef: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: secretName,
+						},
+						Key: "api-key",
+					},
 					ValidityDays: 400, // Invalid: more than 365
 				},
 			}
@@ -110,6 +192,18 @@ var _ = Describe("Issuer Controller", func() {
 		})
 
 		It("should successfully reconcile a valid issuer", func() {
+			By("Creating a secret with the API key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"api-key": []byte(apiKeyValue),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
 			By("Creating a valid issuer")
 			issuer := &zerosslv1alpha1.Issuer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -117,7 +211,12 @@ var _ = Describe("Issuer Controller", func() {
 					Namespace: "default",
 				},
 				Spec: zerosslv1alpha1.IssuerSpec{
-					APIKey:       "test-api-key",
+					APIKeySecretRef: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: secretName,
+						},
+						Key: "api-key",
+					},
 					ValidityDays: 90,
 				},
 			}

@@ -259,6 +259,64 @@ var _ = Describe("Manager", Ordered, func() {
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
 
+		It("should successfully create and validate an issuer with API key from secret", func() {
+			By("creating a secret with the API key")
+			cmd := exec.Command("kubectl", "create", "secret", "generic",
+				"zerossl-api-key",
+				"--namespace", namespace,
+				"--from-literal=api-key=test-api-key")
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create secret")
+
+			By("creating an issuer that references the secret")
+			issuerYAML := fmt.Sprintf(`
+apiVersion: zerossl.cert-manager.io/v1alpha1
+kind: Issuer
+metadata:
+  name: test-issuer
+  namespace: %s
+spec:
+  apiKeySecretRef:
+    name: zerossl-api-key
+    key: api-key
+  validityDays: 90
+  strictDomains: true
+`, namespace)
+
+			// Write the issuer YAML to a temporary file
+			issuerFile := filepath.Join("/tmp", "test-issuer.yaml")
+			err = os.WriteFile(issuerFile, []byte(issuerYAML), os.FileMode(0o644))
+			Expect(err).NotTo(HaveOccurred(), "Failed to write issuer YAML")
+
+			// Apply the issuer
+			cmd = exec.Command("kubectl", "apply", "-f", issuerFile)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create issuer")
+
+			By("verifying the issuer status")
+			verifyIssuerStatus := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "issuer", "test-issuer",
+					"-n", namespace,
+					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("True"), "Issuer not ready")
+			}
+			Eventually(verifyIssuerStatus, 30*time.Second).Should(Succeed())
+
+			By("checking the metrics for successful reconciliation")
+			metricsOutput := getMetricsOutput()
+			Expect(metricsOutput).To(ContainSubstring(
+				`controller_runtime_reconcile_total{controller="issuer",result="success"}`,
+			))
+
+			By("cleaning up the test resources")
+			cmd = exec.Command("kubectl", "delete", "issuer", "test-issuer", "-n", namespace)
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "secret", "zerossl-api-key", "-n", namespace)
+			_, _ = utils.Run(cmd)
+		})
+
 		// TODO: Customize the e2e test suite with scenarios specific to your project.
 		// Consider applying sample/CR(s) and check their status and/or verifying
 		// the reconciliation by using the metrics, i.e.:
