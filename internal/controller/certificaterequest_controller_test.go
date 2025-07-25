@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,6 +46,8 @@ import (
 type mockZeroSSLClient struct {
 	createCertificateFunc   func(*zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
 	downloadCertificateFunc func(string) (*zerossl.CertificateResponse, error)
+	getValidationDataFunc   func(string, zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
+	verifyDNSValidationFunc func(string) error
 }
 
 func (m *mockZeroSSLClient) CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error) {
@@ -67,6 +70,31 @@ func (m *mockZeroSSLClient) DownloadCertificate(id string) (*zerossl.Certificate
 		Certificate:   "test-certificate",
 		CACertificate: "test-ca-certificate",
 	}, nil
+}
+
+func (m *mockZeroSSLClient) GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error) {
+	if m.getValidationDataFunc != nil {
+		return m.getValidationDataFunc(id, method)
+	}
+	return &zerossl.ValidationResponse{
+		Success: true,
+		Records: []zerossl.ValidationRecord{
+			{
+				Domain:           "test.example.com",
+				ValidationType:   "dns-01",
+				ValidationMethod: "DNS_CSR_HASH",
+				TXTName:          "_acme-challenge.test.example.com",
+				TXTValue:         "test-validation-token",
+			},
+		},
+	}, nil
+}
+
+func (m *mockZeroSSLClient) VerifyDNSValidation(id string) error {
+	if m.verifyDNSValidationFunc != nil {
+		return m.verifyDNSValidationFunc(id)
+	}
+	return nil
 }
 
 func generateTestCSR(t *testing.T, commonName string, dnsNames []string) []byte {
@@ -162,16 +190,31 @@ func TestCertificateRequestReconciler(t *testing.T) {
 		WithStatusSubresource(&cmapi.CertificateRequest{}).
 		Build()
 
-	// Create the reconciler
+	// Create the reconciler with a mock client that returns successful responses
 	reconciler := &CertificateRequestReconciler{
 		Client: client,
 		Scheme: scheme,
 		clientFactory: func(apiKey string) ZeroSSLClient {
-			return &mockZeroSSLClient{}
+			return &mockZeroSSLClient{
+				createCertificateFunc: func(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error) {
+					return &zerossl.CertificateResponse{
+						ID:     "test-cert-id",
+						Status: "issued",
+					}, nil
+				},
+				downloadCertificateFunc: func(id string) (*zerossl.CertificateResponse, error) {
+					return &zerossl.CertificateResponse{
+						ID:            "test-cert-id",
+						Status:        "issued",
+						Certificate:   "test-certificate",
+						CACertificate: "test-ca-certificate",
+					}, nil
+				},
+			}
 		},
 	}
 
-	// Run the reconciler
+	// First reconciliation - this will create the certificate and add the annotation
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "test-cr",
@@ -180,7 +223,7 @@ func TestCertificateRequestReconciler(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Check that the CertificateRequest was updated
+	// Check that the CertificateRequest was updated with the annotation
 	updatedCR := &cmapi.CertificateRequest{}
 	err = client.Get(context.Background(), types.NamespacedName{
 		Name:      "test-cr",
@@ -190,6 +233,24 @@ func TestCertificateRequestReconciler(t *testing.T) {
 
 	// Check that the certificate ID annotation was set
 	assert.Contains(t, updatedCR.Annotations, CertificateRequestIDAnnotation)
+	assert.Equal(t, "test-cert-id", updatedCR.Annotations[CertificateRequestIDAnnotation])
+
+	// Second reconciliation - this will process the existing certificate and download it
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-cr",
+			Namespace: "default",
+		},
+	})
+	require.NoError(t, err)
+
+	// Get the updated CertificateRequest
+	updatedCR = &cmapi.CertificateRequest{}
+	err = client.Get(context.Background(), types.NamespacedName{
+		Name:      "test-cr",
+		Namespace: "default",
+	}, updatedCR)
+	require.NoError(t, err)
 
 	// Check that the Ready condition was set
 	var readyCondition *cmapi.CertificateRequestCondition
@@ -199,7 +260,7 @@ func TestCertificateRequestReconciler(t *testing.T) {
 			break
 		}
 	}
-	require.NotNil(t, readyCondition)
+	require.NotNil(t, readyCondition, "Ready condition not found, available conditions: %v", updatedCR.Status.Conditions)
 	assert.Equal(t, cmmeta.ConditionTrue, readyCondition.Status)
 
 	// Check that the certificate and CA were set
@@ -304,4 +365,120 @@ func TestIsIssuerReady(t *testing.T) {
 		},
 	}
 	assert.False(t, isIssuerReady(issuer))
+}
+
+func TestFindSolverForDomain(t *testing.T) {
+	issuer := &zerosslv1alpha1.Issuer{
+		Spec: zerosslv1alpha1.IssuerSpec{
+			Solvers: []zerosslv1alpha1.ACMESolver{
+				{
+					Selector: &zerosslv1alpha1.ACMESolverSelector{
+						DNSNames: []string{"specific.example.com"},
+					},
+					DNS01: &zerosslv1alpha1.ACMEChallengeSolverDNS01{
+						Route53: &zerosslv1alpha1.ACMEChallengeSolverDNS01Route53{
+							Region:       "us-east-1",
+							HostedZoneID: "ZONE1",
+						},
+					},
+				},
+				{
+					Selector: &zerosslv1alpha1.ACMESolverSelector{
+						DNSZones: []string{"example.com"},
+					},
+					DNS01: &zerosslv1alpha1.ACMEChallengeSolverDNS01{
+						Route53: &zerosslv1alpha1.ACMEChallengeSolverDNS01Route53{
+							Region:       "us-east-1",
+							HostedZoneID: "ZONE2",
+						},
+					},
+				},
+				{
+					DNS01: &zerosslv1alpha1.ACMEChallengeSolverDNS01{
+						Route53: &zerosslv1alpha1.ACMEChallengeSolverDNS01Route53{
+							Region:       "us-east-1",
+							HostedZoneID: "ZONE3",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Test exact domain match
+	solver := findSolverForDomain(issuer, "specific.example.com")
+	require.NotNil(t, solver)
+	assert.Equal(t, "ZONE1", solver.DNS01.Route53.HostedZoneID)
+
+	// Test domain in zone match
+	solver = findSolverForDomain(issuer, "sub.example.com")
+	require.NotNil(t, solver)
+	assert.Equal(t, "ZONE2", solver.DNS01.Route53.HostedZoneID)
+
+	// Test catch-all solver
+	solver = findSolverForDomain(issuer, "other-domain.com")
+	require.NotNil(t, solver)
+	assert.Equal(t, "ZONE3", solver.DNS01.Route53.HostedZoneID)
+
+	// Test no solvers
+	issuer.Spec.Solvers = []zerosslv1alpha1.ACMESolver{}
+	solver = findSolverForDomain(issuer, "example.com")
+	assert.Nil(t, solver)
+}
+
+func TestContainsDomain(t *testing.T) {
+	domains := []string{"example.com", "example.org"}
+
+	assert.True(t, containsDomain(domains, "example.com"))
+	assert.True(t, containsDomain(domains, "example.org"))
+	assert.False(t, containsDomain(domains, "example.net"))
+	assert.False(t, containsDomain(domains, "sub.example.com"))
+}
+
+func TestMatchesDomainInZones(t *testing.T) {
+	zones := []string{"example.com", "example.org"}
+
+	assert.True(t, matchesDomainInZones(zones, "example.com"))
+	assert.True(t, matchesDomainInZones(zones, "example.org"))
+	assert.True(t, matchesDomainInZones(zones, "sub.example.com"))
+	assert.True(t, matchesDomainInZones(zones, "sub.sub.example.com"))
+	assert.False(t, matchesDomainInZones(zones, "example.net"))
+	assert.False(t, matchesDomainInZones(zones, "sub.example.net"))
+}
+
+func TestHasDNSValidator(t *testing.T) {
+	issuer := &zerosslv1alpha1.Issuer{
+		Spec: zerosslv1alpha1.IssuerSpec{
+			Solvers: []zerosslv1alpha1.ACMESolver{
+				{
+					Selector: &zerosslv1alpha1.ACMESolverSelector{
+						DNSZones: []string{"example.com"},
+					},
+					DNS01: &zerosslv1alpha1.ACMEChallengeSolverDNS01{
+						Route53: &zerosslv1alpha1.ACMEChallengeSolverDNS01Route53{
+							Region:       "us-east-1",
+							HostedZoneID: "ZONE1",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Test with DNS validator
+	domains := []string{"test.example.com", "test.example.org"}
+	assert.True(t, hasDNSValidator(issuer, domains))
+
+	// Test without DNS validator
+	domains = []string{"test.example.org", "test.example.net"}
+	assert.False(t, hasDNSValidator(issuer, domains))
+}
+
+func TestIsNotReadyError(t *testing.T) {
+	assert.False(t, isNotReadyError(nil))
+	assert.True(t, isNotReadyError(fmt.Errorf("certificate is not issued yet")))
+	assert.True(t, isNotReadyError(fmt.Errorf("still being processed")))
+	assert.True(t, isNotReadyError(fmt.Errorf("still pending")))
+	assert.True(t, isNotReadyError(fmt.Errorf("validation in progress")))
+	assert.False(t, isNotReadyError(fmt.Errorf("some other error")))
 }

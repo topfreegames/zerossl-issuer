@@ -79,7 +79,9 @@ func InstallPrometheusOperator() error {
 func UninstallPrometheusOperator() {
 	// Safety check: only run in Kind clusters
 	if !IsKindCluster() {
-		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Refusing to uninstall Prometheus Operator in non-Kind cluster. Current context is not a Kind cluster.\n")
+		_, _ = fmt.Fprintf(GinkgoWriter,
+			"WARNING: Refusing to uninstall Prometheus Operator in non-Kind cluster. "+
+				"Current context is not a Kind cluster.\n")
 		return
 	}
 
@@ -134,7 +136,9 @@ func IsKindCluster() bool {
 func UninstallCertManager() {
 	// Safety check: only run in Kind clusters
 	if !IsKindCluster() {
-		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Refusing to uninstall cert-manager in non-Kind cluster. Current context is not a Kind cluster.\n")
+		_, _ = fmt.Fprintf(GinkgoWriter,
+			"WARNING: Refusing to uninstall cert-manager in non-Kind cluster. "+
+				"Current context is not a Kind cluster.\n")
 		return
 	}
 

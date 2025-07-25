@@ -9,10 +9,11 @@ import (
 
 // CertificateRequest represents a request to create a new certificate
 type CertificateRequest struct {
-	Domains       []string `json:"certificate_domains"`
-	ValidityDays  int      `json:"certificate_validity_days"`
-	CSR           string   `json:"certificate_csr"`
-	StrictDomains bool     `json:"strict_domains"`
+	Domains          []string         `json:"certificate_domains"`
+	ValidityDays     int              `json:"certificate_validity_days"`
+	CSR              string           `json:"certificate_csr"`
+	StrictDomains    bool             `json:"strict_domains"`
+	ValidationMethod ValidationMethod `json:"validation_method,omitempty"`
 }
 
 // CertificateResponse represents the response from creating a certificate
@@ -39,6 +40,11 @@ func (c *Client) CreateCertificate(req *CertificateRequest) (*CertificateRespons
 		"certificate_validity_days": req.ValidityDays,
 		"certificate_csr":           req.CSR,
 		"strict_domains":            req.StrictDomains,
+	}
+
+	// Add validation method if specified
+	if req.ValidationMethod != "" {
+		data["validation_method"] = string(req.ValidationMethod)
 	}
 
 	jsonData, err := json.Marshal(data)

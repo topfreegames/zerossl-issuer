@@ -41,6 +41,65 @@ type IssuerSpec struct {
 	// +optional
 	// +kubebuilder:default=true
 	StrictDomains bool `json:"strictDomains,omitempty"`
+
+	// Solvers is a list of challenge solvers that will be used to solve
+	// ACME challenges for the matching domains.
+	// +optional
+	Solvers []ACMESolver `json:"solvers,omitempty"`
+}
+
+// ACMESolver contains the configuration for solving an ACME challenge for
+// a set of domains.
+type ACMESolver struct {
+	// Selector selects a set of DNSNames on the Certificate resource that
+	// should be solved using this challenge solver.
+	// +optional
+	Selector *ACMESolverSelector `json:"selector,omitempty"`
+
+	// DNS01 is the configuration for DNS01 challenge solver
+	// +optional
+	DNS01 *ACMEChallengeSolverDNS01 `json:"dns01,omitempty"`
+}
+
+// ACMESolverSelector selects a set of DNSNames on a Certificate resource
+// that should be solved using this challenge solver.
+type ACMESolverSelector struct {
+	// DNSNames is a list of DNS names that should be solved using this
+	// challenge solver.
+	// +optional
+	DNSNames []string `json:"dnsNames,omitempty"`
+
+	// DNSZones is a list of DNS zones that should be solved using this
+	// challenge solver.
+	// +optional
+	DNSZones []string `json:"dnsZones,omitempty"`
+}
+
+// ACMEChallengeSolverDNS01 is a DNS01 solver for ACME challenges
+type ACMEChallengeSolverDNS01 struct {
+	// Route53 is a DNS01 solver for AWS Route53
+	// +optional
+	Route53 *ACMEChallengeSolverDNS01Route53 `json:"route53,omitempty"`
+}
+
+// ACMEChallengeSolverDNS01Route53 is a Route53 DNS01 solver
+type ACMEChallengeSolverDNS01Route53 struct {
+	// AccessKeyID is the AWS access key ID used for Route53 API access
+	// +optional
+	AccessKeyID string `json:"accessKeyID,omitempty"`
+
+	// SecretAccessKeySecretRef is a reference to a secret containing the AWS
+	// secret access key used for Route53 API access
+	// +optional
+	SecretAccessKeySecretRef corev1.SecretKeySelector `json:"secretAccessKeySecretRef,omitempty"`
+
+	// HostedZoneID is the Route53 hosted zone ID to use for DNS01 challenges
+	// +required
+	HostedZoneID string `json:"hostedZoneID"`
+
+	// Region is the AWS region to use for Route53 API access
+	// +required
+	Region string `json:"region"`
 }
 
 // IssuerStatus defines the observed state of Issuer.

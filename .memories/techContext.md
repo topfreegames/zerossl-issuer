@@ -8,6 +8,7 @@
 - cert-manager v1.6.0+
 - ZeroSSL API
 - Docker/Containerd
+- AWS Route53 API (for DNS solver)
 
 ### Development Tools
 - Kubebuilder 4.7.0
@@ -21,6 +22,7 @@
 - client-go
 - api-machinery
 - cert-manager API
+- AWS SDK (for Route53)
 
 ## Development Setup
 
@@ -60,8 +62,9 @@ make manifests
 ### API Limitations
 - ZeroSSL API rate limits
 - Certificate validity periods
-- Domain validation methods
+- Domain validation methods (HTTP, DNS)
 - API key requirements
+- AWS credentials for Route53 access
 
 ### Resource Requirements
 - Minimum memory: 64Mi
@@ -74,6 +77,7 @@ make manifests
 - Kubernetes API server access
 - Network access to ZeroSSL API
 - cert-manager installation
+- AWS Route53 API access (for DNS solver)
 
 ### Security Constraints
 - Non-root execution
@@ -81,6 +85,7 @@ make manifests
 - No privileged access
 - Secure API key storage
 - HTTPS for metrics
+- Secure AWS credential management
 
 ## Dependencies
 
@@ -105,6 +110,10 @@ github.com/cert-manager/cert-manager
 - Version: v1alpha1
 - Kind: Issuer
 - Scope: Namespaced
+- DNS Solver Types:
+  - Route53 configuration
+  - Domain selectors
+  - Credentials management
 
 ### Metrics Configuration
 - Port: 8443 (HTTPS)
@@ -141,4 +150,26 @@ resources:
 - RBAC roles/bindings
 - CRDs
 - Services
-- Network Policies 
+- Network Policies
+
+### DNS Solver Configuration
+
+#### Route53 Solver Example
+```yaml
+solvers:
+- dns01:
+    route53:
+      accessKeyID: AKIAEXAMPLE
+      hostedZoneID: Z2E9THH2A4HU6P
+      region: us-east-1
+      secretAccessKeySecretRef:
+        key: secret
+        name: route53-credentials
+  selector:
+    dnsZones:
+    - example.com
+```
+
+#### Domain Selector Options
+- dnsNames: Explicit domain list
+- dnsZones: Domain zones for wildcard matching 

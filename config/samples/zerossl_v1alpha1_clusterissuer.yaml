@@ -1,7 +1,7 @@
 apiVersion: zerossl.cert-manager.io/v1alpha1
-kind: Issuer
+kind: ClusterIssuer
 metadata:
-  name: issuer-sample
+  name: zerossl-dns
 spec:
   # Reference to a secret containing the ZeroSSL API key
   apiKeySecretRef:
@@ -11,7 +11,7 @@ spec:
   validityDays: 90
   # Optional: Enable strict domain validation (default: true)
   strictDomains: true
-  # Optional: Challenge solvers configuration
+  # DNS solvers configuration for various domains
   solvers:
   - dns01:
       route53:
@@ -24,12 +24,24 @@ spec:
     selector:
       dnsZones:
       - example.com
+  - dns01:
+      route53:
+        accessKeyID: AKIAEXAMPLE987654321
+        hostedZoneID: Z07844392UF3VO9M8SHRR
+        region: us-east-1
+        secretAccessKeySecretRef:
+          key: secret
+          name: route53-credentials
+    selector:
+      dnsZones:
+      - example.org
 ---
 # Example secret containing the ZeroSSL API key
 apiVersion: v1
 kind: Secret
 metadata:
   name: zerossl-api-key
+  namespace: cert-manager
 type: Opaque
 stringData:
   api-key: "your-api-key-here"
@@ -39,6 +51,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: route53-credentials
+  namespace: cert-manager
 type: Opaque
 stringData:
-  secret: "your-route53-secret-access-key-here"
+  secret: "your-route53-secret-access-key-here" 

@@ -68,7 +68,7 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Validate the issuer configuration
-	if err := r.validateIssuer(issuer); err != nil {
+	if err := r.validateIssuer(ctx, issuer); err != nil {
 		logger.Error(err, "Failed to validate issuer configuration")
 		// Update the Ready condition
 		meta.SetStatusCondition(&issuer.Status.Conditions, metav1.Condition{
@@ -107,7 +107,7 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 // validateIssuer validates the issuer configuration
-func (r *IssuerReconciler) validateIssuer(issuer *zerosslv1alpha1.Issuer) error {
+func (r *IssuerReconciler) validateIssuer(ctx context.Context, issuer *zerosslv1alpha1.Issuer) error {
 	// Get the secret containing the API key
 	secret := &corev1.Secret{}
 	secretName := types.NamespacedName{
@@ -115,7 +115,7 @@ func (r *IssuerReconciler) validateIssuer(issuer *zerosslv1alpha1.Issuer) error 
 		Name:      issuer.Spec.APIKeySecretRef.Name,
 	}
 
-	if err := r.Get(context.Background(), secretName, secret); err != nil {
+	if err := r.Get(ctx, secretName, secret); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("secret %s/%s not found", secretName.Namespace, secretName.Name)
 		}
@@ -140,6 +140,72 @@ func (r *IssuerReconciler) validateIssuer(issuer *zerosslv1alpha1.Issuer) error 
 
 	if issuer.Spec.ValidityDays < 1 || issuer.Spec.ValidityDays > 365 {
 		return fmt.Errorf("validityDays must be between 1 and 365")
+	}
+
+	// Validate solvers if specified
+	for i, solver := range issuer.Spec.Solvers {
+		if err := r.validateSolver(ctx, issuer.Namespace, &solver); err != nil {
+			return fmt.Errorf("invalid solver at index %d: %v", i, err)
+		}
+	}
+
+	return nil
+}
+
+// validateSolver validates an individual ACME solver configuration
+func (r *IssuerReconciler) validateSolver(ctx context.Context, namespace string, solver *zerosslv1alpha1.ACMESolver) error {
+	// Validate the DNS01 solver if specified
+	if solver.DNS01 != nil {
+		if err := r.validateDNS01Solver(ctx, namespace, solver.DNS01); err != nil {
+			return fmt.Errorf("invalid DNS01 solver: %v", err)
+		}
+	}
+
+	// Validate that at least one solver method is configured
+	if solver.DNS01 == nil {
+		return fmt.Errorf("no solver method configured")
+	}
+
+	return nil
+}
+
+// validateDNS01Solver validates a DNS01 solver configuration
+func (r *IssuerReconciler) validateDNS01Solver(ctx context.Context, namespace string, dns01 *zerosslv1alpha1.ACMEChallengeSolverDNS01) error {
+	// Validate Route53 configuration if specified
+	if dns01.Route53 != nil {
+		route53 := dns01.Route53
+
+		// Validate required fields
+		if route53.HostedZoneID == "" {
+			return fmt.Errorf("hostedZoneID must be specified")
+		}
+
+		if route53.Region == "" {
+			return fmt.Errorf("region must be specified")
+		}
+
+		// Validate secret access key if specified
+		if route53.SecretAccessKeySecretRef.Name != "" {
+			secretName := types.NamespacedName{
+				Namespace: namespace,
+				Name:      route53.SecretAccessKeySecretRef.Name,
+			}
+
+			secret := &corev1.Secret{}
+			if err := r.Get(ctx, secretName, secret); err != nil {
+				if apierrors.IsNotFound(err) {
+					return fmt.Errorf("secret %s/%s not found", secretName.Namespace, secretName.Name)
+				}
+				return fmt.Errorf("failed to get secret %s/%s: %v", secretName.Namespace, secretName.Name, err)
+			}
+
+			key := route53.SecretAccessKeySecretRef.Key
+			if _, ok := secret.Data[key]; !ok {
+				return fmt.Errorf("key %s not found in secret %s/%s", key, secretName.Namespace, secretName.Name)
+			}
+		}
+	} else {
+		return fmt.Errorf("no DNS01 provider configured")
 	}
 
 	return nil

@@ -21,6 +21,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -48,6 +50,8 @@ const (
 type ZeroSSLClient interface {
 	CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
 	DownloadCertificate(id string) (*zerossl.CertificateResponse, error)
+	GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
+	VerifyDNSValidation(id string) error
 }
 
 // CertificateRequestReconciler reconciles a CertificateRequest object
@@ -88,36 +92,39 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, fmt.Errorf("failed to get CertificateRequest: %v", err)
 	}
 
-	// Check if the CertificateRequest has been denied
+	// Check if the CertificateRequest has been denied or completed
 	if isDenied(cr) {
 		logger.Info("CertificateRequest has been denied, not processing")
 		return ctrl.Result{}, nil
 	}
-
-	// Check if the CertificateRequest has already been completed
 	if isComplete(cr) {
 		logger.Info("CertificateRequest is complete, not processing")
 		return ctrl.Result{}, nil
 	}
 
 	// Check if the CertificateRequest references a ZeroSSL issuer
-	issuerGvk := zerosslv1alpha1.GroupVersion.WithKind("Issuer")
-	issuerGroup := issuerGvk.Group
-
-	if cr.Spec.IssuerRef.Group != issuerGroup {
+	if !r.isZeroSSLIssuer(cr) {
 		logger.Info("CertificateRequest does not reference a ZeroSSL issuer", "group", cr.Spec.IssuerRef.Group)
 		return ctrl.Result{}, nil
 	}
 
-	// Get the referenced issuer
-	issuer := &zerosslv1alpha1.Issuer{}
-	issuerName := types.NamespacedName{
-		Name:      cr.Spec.IssuerRef.Name,
-		Namespace: req.Namespace,
-	}
+	// Process the certificate request
+	return r.processCertificateRequest(ctx, req, cr)
+}
 
-	if err := r.Get(ctx, issuerName, issuer); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get issuer: %v", err)
+// isZeroSSLIssuer checks if the certificate request references a ZeroSSL issuer
+func (r *CertificateRequestReconciler) isZeroSSLIssuer(cr *cmapi.CertificateRequest) bool {
+	issuerGvk := zerosslv1alpha1.GroupVersion.WithKind("Issuer")
+	issuerGroup := issuerGvk.Group
+	return cr.Spec.IssuerRef.Group == issuerGroup
+}
+
+// processCertificateRequest handles the main certificate request processing logic
+func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Context, req ctrl.Request, cr *cmapi.CertificateRequest) (ctrl.Result, error) {
+	// Get the referenced issuer
+	issuer, err := r.getIssuer(ctx, req.Namespace, cr.Spec.IssuerRef.Name)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Check if the issuer is ready
@@ -129,24 +136,11 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Get the API key from the secret
-	secret := &corev1.Secret{}
-	secretName := types.NamespacedName{
-		Name:      issuer.Spec.APIKeySecretRef.Name,
-		Namespace: issuer.Namespace,
+	// Get ZeroSSL client
+	zerosslClient, err := r.getZeroSSLClient(ctx, issuer)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
-
-	if err := r.Get(ctx, secretName, secret); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get API key secret: %v", err)
-	}
-
-	apiKey, ok := secret.Data[issuer.Spec.APIKeySecretRef.Key]
-	if !ok {
-		return ctrl.Result{}, fmt.Errorf("API key not found in secret")
-	}
-
-	// Create ZeroSSL client
-	zerosslClient := r.clientFactory(string(apiKey))
 
 	// Extract domains from the CSR
 	domains, err := getDNSNamesFromCSR(cr.Spec.Request)
@@ -158,12 +152,86 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
+	// Check if there is a certificate ID already stored in annotations
+	var certID string
+	if cr.Annotations != nil {
+		certID = cr.Annotations[CertificateRequestIDAnnotation]
+	}
+
+	// If no certificate ID is stored, create a new certificate
+	if certID == "" {
+		return r.createNewCertificate(ctx, cr, issuer, zerosslClient, domains)
+	}
+
+	// For existing certificates or when completing DNS validation
+	return r.handleExistingCertificate(ctx, cr, issuer, zerosslClient, domains, certID)
+}
+
+// getIssuer retrieves the issuer referenced by the certificate request
+func (r *CertificateRequestReconciler) getIssuer(ctx context.Context, namespace, name string) (*zerosslv1alpha1.Issuer, error) {
+	issuer := &zerosslv1alpha1.Issuer{}
+	issuerName := types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+
+	if err := r.Get(ctx, issuerName, issuer); err != nil {
+		return nil, fmt.Errorf("failed to get issuer: %v", err)
+	}
+
+	return issuer, nil
+}
+
+// getZeroSSLClient creates a ZeroSSL client from the issuer configuration
+func (r *CertificateRequestReconciler) getZeroSSLClient(ctx context.Context, issuer *zerosslv1alpha1.Issuer) (ZeroSSLClient, error) {
+	// Get the API key from the secret
+	secret := &corev1.Secret{}
+	secretName := types.NamespacedName{
+		Name:      issuer.Spec.APIKeySecretRef.Name,
+		Namespace: issuer.Namespace,
+	}
+
+	if err := r.Get(ctx, secretName, secret); err != nil {
+		return nil, fmt.Errorf("failed to get API key secret: %v", err)
+	}
+
+	apiKey, ok := secret.Data[issuer.Spec.APIKeySecretRef.Key]
+	if !ok {
+		return nil, fmt.Errorf("API key not found in secret")
+	}
+
+	// Create ZeroSSL client
+	return r.clientFactory(string(apiKey)), nil
+}
+
+// createNewCertificate handles the creation of a new certificate
+func (r *CertificateRequestReconciler) createNewCertificate(
+	ctx context.Context,
+	cr *cmapi.CertificateRequest,
+	issuer *zerosslv1alpha1.Issuer,
+	zerosslClient ZeroSSLClient,
+	domains []string,
+) (ctrl.Result, error) {
+	// Determine if we need to use DNS validation
+	useDNS := false
+	for _, domain := range domains {
+		if solver := findSolverForDomain(issuer, domain); solver != nil && solver.DNS01 != nil {
+			useDNS = true
+			break
+		}
+	}
+
 	// Create certificate request
 	certReq := &zerossl.CertificateRequest{
 		Domains:       domains,
 		ValidityDays:  issuer.Spec.ValidityDays,
 		CSR:           string(cr.Spec.Request),
-		StrictDomains: true,
+		StrictDomains: issuer.Spec.StrictDomains,
+	}
+
+	// Set validation method if using DNS
+	if useDNS {
+		certReq.ValidationMethod = zerossl.ValidationMethodDNS
 	}
 
 	certResp, err := zerosslClient.CreateCertificate(certReq)
@@ -180,20 +248,96 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 		cr.Annotations = make(map[string]string)
 	}
 	cr.Annotations[CertificateRequestIDAnnotation] = certResp.ID
+	certID := certResp.ID
 
 	// Update the CertificateRequest with the annotation
 	if err := r.Update(ctx, cr); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update CertificateRequest annotations: %v", err)
 	}
 
-	// Download the certificate
-	certResp, err = zerosslClient.DownloadCertificate(certResp.ID)
+	// If using DNS validation, get validation data and return to wait for DNS records to be created
+	if useDNS {
+		return r.handleDNSValidation(ctx, cr, zerosslClient, certID)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// handleDNSValidation processes DNS validation for a certificate
+func (r *CertificateRequestReconciler) handleDNSValidation(
+	ctx context.Context,
+	cr *cmapi.CertificateRequest,
+	zerosslClient ZeroSSLClient,
+	certID string,
+) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Get validation data for DNS
+	validationResp, err := zerosslClient.GetValidationData(certID, zerossl.ValidationMethodDNS)
 	if err != nil {
+		setFailureCondition(cr, "ValidationDataFailed", fmt.Sprintf("Failed to get validation data: %v", err))
+		if err := r.Status().Update(ctx, cr); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Log validation records for DNS solver to create
+	logger.Info("DNS validation required", "certificate", certID)
+	for _, record := range validationResp.Records {
+		logger.Info("DNS validation record",
+			"domain", record.Domain,
+			"type", record.ValidationType,
+			"txtName", record.TXTName,
+			"txtValue", record.TXTValue)
+	}
+
+	// DNS records need to be created externally, so we'll requeue for later
+	return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Second}, nil
+}
+
+// handleExistingCertificate processes a certificate that has already been created
+func (r *CertificateRequestReconciler) handleExistingCertificate(
+	ctx context.Context,
+	cr *cmapi.CertificateRequest,
+	issuer *zerosslv1alpha1.Issuer,
+	zerosslClient ZeroSSLClient,
+	domains []string,
+	certID string,
+) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// For existing certificates or when completing DNS validation
+	if useDNS := hasDNSValidator(issuer, domains); useDNS {
+		// Try to verify the DNS validation
+		logger.Info("Verifying DNS validation", "certificate", certID)
+		if err := zerosslClient.VerifyDNSValidation(certID); err != nil {
+			logger.Info("DNS validation not completed yet", "error", err.Error())
+			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		}
+		logger.Info("DNS validation successful", "certificate", certID)
+	}
+
+	// Download the certificate
+	certResp, err := zerosslClient.DownloadCertificate(certID)
+	if err != nil {
+		// If certificate not ready yet, requeue
+		if isNotReadyError(err) {
+			logger.Info("Certificate not ready yet, will requeue", "error", err)
+			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		}
+
 		setFailureCondition(cr, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// If certificate is empty, it's not ready yet
+	if certResp.Certificate == "" {
+		logger.Info("Certificate not ready yet, will requeue")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 
 	// Update the CertificateRequest status with the certificate and CA bundle
@@ -295,4 +439,102 @@ func getDNSNamesFromCSR(csrBytes []byte) ([]string, error) {
 	}
 
 	return dnsNames, nil
+}
+
+// Helper functions to support DNS validation
+
+// findSolverForDomain finds the appropriate solver for a given domain
+func findSolverForDomain(issuer *zerosslv1alpha1.Issuer, domain string) *zerosslv1alpha1.ACMESolver {
+	if len(issuer.Spec.Solvers) == 0 {
+		return nil
+	}
+
+	var matchingSolver *zerosslv1alpha1.ACMESolver
+
+	// First pass: look for exact DNS name matches
+	for i := range issuer.Spec.Solvers {
+		solver := &issuer.Spec.Solvers[i]
+		if solver.Selector == nil {
+			// This solver has no selectors, so it's a catch-all
+			// We'll use this one if no others match
+			if matchingSolver == nil {
+				matchingSolver = solver
+			}
+			continue
+		}
+
+		if containsDomain(solver.Selector.DNSNames, domain) {
+			return solver
+		}
+	}
+
+	// Second pass: look for DNS zone matches
+	for i := range issuer.Spec.Solvers {
+		solver := &issuer.Spec.Solvers[i]
+		if solver.Selector == nil {
+			continue
+		}
+
+		if matchesDomainInZones(solver.Selector.DNSZones, domain) {
+			return solver
+		}
+	}
+
+	// Return the catch-all solver if we found one
+	return matchingSolver
+}
+
+// containsDomain checks if the domain list contains the specified domain
+func containsDomain(domains []string, domain string) bool {
+	for _, d := range domains {
+		if d == domain {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesDomainInZones checks if the domain is in any of the DNS zones
+func matchesDomainInZones(zones []string, domain string) bool {
+	for _, zone := range zones {
+		if strings.HasSuffix(domain, "."+zone) || domain == zone {
+			return true
+		}
+	}
+	return false
+}
+
+// hasDNSValidator checks if any of the domains requires DNS validation
+func hasDNSValidator(issuer *zerosslv1alpha1.Issuer, domains []string) bool {
+	for _, domain := range domains {
+		solver := findSolverForDomain(issuer, domain)
+		if solver != nil && solver.DNS01 != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// isNotReadyError checks if an error indicates that the certificate is not ready yet
+func isNotReadyError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errorMsg := err.Error()
+	// Add specific ZeroSSL error messages that indicate certificate not ready yet
+	notReadyIndicators := []string{
+		"certificate is not issued yet",
+		"still being processed",
+		"still pending",
+		"validation in progress",
+	}
+
+	for _, indicator := range notReadyIndicators {
+		if strings.Contains(strings.ToLower(errorMsg), strings.ToLower(indicator)) {
+			return true
+		}
+	}
+
+	return false
 }

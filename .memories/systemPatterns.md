@@ -7,13 +7,16 @@
 ├── API (api/)
 │   └── v1alpha1/
 │       ├── Issuer CRD definition
-│       └── Type definitions
+│       ├── Type definitions
+│       └── DNS solver types
 ├── Controller (internal/controller/)
 │   ├── Issuer reconciliation
-│   └── Certificate management
+│   ├── Certificate management
+│   └── DNS solver validation
 ├── ZeroSSL Client (internal/zerossl/)
 │   ├── API client
-│   └── Certificate operations
+│   ├── Certificate operations
+│   └── DNS validation methods
 └── Configuration (config/)
     ├── CRDs
     ├── RBAC
@@ -40,6 +43,12 @@
 - Abstracted resource operations
 - Consistent error handling
 
+### DNS Solver Pattern
+- Domain-based solver selection
+- Route53 DNS provider implementation
+- DNS record validation flow
+- Cert-manager compatible pattern
+
 ## Technical Decisions
 
 ### Language & Framework
@@ -60,6 +69,7 @@
 - Minimal container privileges
 - Secure API key handling
 - HTTPS for metrics endpoint
+- AWS credential management for Route53
 
 ### Monitoring & Observability
 - Prometheus metrics
@@ -75,18 +85,25 @@
 2. cert-manager CRDs
 3. ZeroSSL API
 4. Metrics server
+5. AWS Route53 API (for DNS solver)
 
 ### Data Flow
 1. Certificate request creation
 2. ZeroSSL API interaction
 3. Secret management
 4. Status updates
+5. DNS validation flow:
+   - DNS solver selection based on domain
+   - TXT record creation requirements
+   - DNS validation verification
+   - Certificate retrieval
 
 ### Error Handling Strategy
 1. Transient vs. permanent errors
 2. Automatic retries
 3. Exponential backoff
 4. Clear error reporting
+5. DNS validation specific errors
 
 ## Development Patterns
 
@@ -95,12 +112,14 @@
 2. Integration tests for controller
 3. E2E tests for full workflow
 4. Test fixtures and mocks
+5. DNS solver specific tests
 
 ### Code Organization
 1. Clear package boundaries
 2. Dependency injection
 3. Interface-based design
 4. Consistent error handling
+5. DNS solver abstraction for extensibility
 
 ### Deployment Strategy
 1. Kubernetes manifests

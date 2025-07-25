@@ -63,6 +63,87 @@ spec:
                 - key
                 type: object
                 x-kubernetes-map-type: atomic
+              solvers:
+                description: |-
+                  Solvers is a list of challenge solvers that will be used to solve
+                  ACME challenges for the matching domains.
+                items:
+                  description: |-
+                    ACMESolver contains the configuration for solving an ACME challenge for
+                    a set of domains.
+                  properties:
+                    dns01:
+                      description: DNS01 is the configuration for DNS01 challenge
+                        solver
+                      properties:
+                        route53:
+                          description: Route53 is a DNS01 solver for AWS Route53
+                          properties:
+                            accessKeyID:
+                              description: AccessKeyID is the AWS access key ID used
+                                for Route53 API access
+                              type: string
+                            hostedZoneID:
+                              description: HostedZoneID is the Route53 hosted zone
+                                ID to use for DNS01 challenges
+                              type: string
+                            region:
+                              description: Region is the AWS region to use for Route53
+                                API access
+                              type: string
+                            secretAccessKeySecretRef:
+                              description: |-
+                                SecretAccessKeySecretRef is a reference to a secret containing the AWS
+                                secret access key used for Route53 API access
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must
+                                    be a valid secret key.
+                                  type: string
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key
+                                    must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          required:
+                          - hostedZoneID
+                          - region
+                          type: object
+                      type: object
+                    selector:
+                      description: |-
+                        Selector selects a set of DNSNames on the Certificate resource that
+                        should be solved using this challenge solver.
+                      properties:
+                        dnsNames:
+                          description: |-
+                            DNSNames is a list of DNS names that should be solved using this
+                            challenge solver.
+                          items:
+                            type: string
+                          type: array
+                        dnsZones:
+                          description: |-
+                            DNSZones is a list of DNS zones that should be solved using this
+                            challenge solver.
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                  type: object
+                type: array
               strictDomains:
                 default: true
                 description: StrictDomains enables strict domain validation

@@ -14,18 +14,21 @@
 ✅ API key validation
 ✅ Certificate creation
 ✅ Certificate retrieval
+✅ DNS validation support
 
 ### Controller
 ✅ Basic controller structure
 ✅ Resource watching
 ✅ Basic reconciliation loop
 ✅ Health checks
+✅ DNS solver implementation
 
 ### Testing
 ✅ Test framework setup
 ✅ Basic unit tests
 ✅ E2E test structure
 ✅ CI workflow
+✅ DNS solver unit tests
 
 ## In Progress
 
@@ -40,20 +43,23 @@
 🔄 Adding more E2E tests
 🔄 Integration tests
 🔄 Test fixtures
+🔄 DNS validation E2E tests
 
 ### Documentation
 🔄 API documentation
 🔄 Usage examples
 🔄 Development guide
 🔄 Troubleshooting guide
+🔄 DNS solver documentation
 
 ## To Do
 
 ### Features
 ❌ Webhook validation
-❌ Additional validation methods
+✅ DNS validation method
 ❌ Rate limiting
 ❌ Advanced certificate management
+❌ Additional DNS providers
 
 ### Monitoring
 ❌ Enhanced metrics
@@ -80,18 +86,21 @@
 - Core components in place
 - Testing infrastructure ready
 - Documentation in progress
+- DNS solver support added
 
 ### Known Issues
 1. Rate limiting not implemented
 2. Test coverage needs improvement
 3. Documentation incomplete
 4. Error handling needs enhancement
+5. Limited to Route53 DNS provider
 
 ### Next Milestones
 1. Complete core controller functionality
 2. Implement comprehensive testing
 3. Enhance documentation
 4. Add production readiness features
+5. Add additional DNS providers
 
 ## Blockers
 None currently identified
@@ -101,4 +110,5 @@ All core dependencies are available and working:
 - cert-manager
 - Kubernetes
 - ZeroSSL API
-- Development tools 
+- Development tools
+- AWS SDK for Route53 

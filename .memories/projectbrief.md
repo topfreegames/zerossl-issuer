@@ -11,6 +11,7 @@ ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSSL to
 3. Support certificate issuance and renewal
 4. Integrate with ZeroSSL API for certificate operations
 5. Support Kubernetes-native certificate management
+6. Support DNS validation for certificates, starting with Route53
 
 ### Technical Requirements
 1. Kubernetes compatibility (v1.19+)
@@ -19,6 +20,7 @@ ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSSL to
 4. Support for multiple architectures (amd64, arm64, ppc64le, s390x)
 5. Metrics and monitoring capabilities
 6. Health checks and readiness probes
+7. DNS validation via supported providers
 
 ### Security Requirements
 1. Secure handling of ZeroSSL API keys
@@ -27,6 +29,7 @@ ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSSL to
 4. Read-only root filesystem
 5. Dropped Linux capabilities
 6. Secure metrics endpoint (HTTPS)
+7. Secure handling of DNS provider credentials
 
 ## Project Goals
 1. Provide seamless integration between cert-manager and ZeroSSL
@@ -34,6 +37,7 @@ ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSSL to
 3. Ensure high reliability and availability
 4. Maintain security best practices
 5. Support enterprise-grade deployments
+6. Enable wildcard certificate management through DNS validation
 
 ## Success Criteria
 1. Successful certificate issuance and renewal
@@ -41,4 +45,5 @@ ZeroSSL Issuer is a cert-manager external issuer that integrates with ZeroSSL to
 3. Comprehensive test coverage
 4. Production-ready security measures
 5. Clear documentation and usage examples
-6. Stable performance under load 
+6. Stable performance under load
+7. Successful DNS validation for certificates 

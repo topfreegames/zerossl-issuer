@@ -8,6 +8,26 @@
 3. Keep changes focused and minimal
 4. Document changes in code and commit messages
 5. Update API documentation when changing CRDs
+6. Update the memory bank in `.memories` directory after significant changes
+
+### Memory Bank Maintenance
+1. ALWAYS use `.memories` directory as the official memory bank location
+2. Update relevant memory bank files after implementing new features:
+   - `systemPatterns.md`: Update for architectural changes
+   - `techContext.md`: Update for technical implementation details
+   - `progress.md`: Update completed and in-progress items
+   - `activeContext.md`: Update current status and focus areas
+   - `productContext.md`: Update for user-facing feature changes
+3. Memory update requirements:
+   - Add new features to appropriate sections
+   - Update status of existing features
+   - Document new patterns and approaches
+   - Keep implementation details accurate
+4. Memory update timing:
+   - After completing a feature
+   - After modifying core architecture
+   - After adding new dependencies
+   - After changing API structure
 
 ### Testing Requirements
 1. ALWAYS review and update tests after code changes:
@@ -33,6 +53,7 @@
    - Documentation is updated
    - CRDs are regenerated if needed
    - Samples are updated
+   - Memory bank is updated
 2. Testing verification:
    - All tests pass locally
    - Coverage is maintained or improved
@@ -64,6 +85,7 @@
 2. Document API changes
 3. Update examples
 4. Include troubleshooting
+5. Keep memory bank in `.memories` accurate and up-to-date
 
 ## Testing Guidelines
 
@@ -90,3 +112,20 @@
 2. Remove obsolete tests
 3. Update for API changes
 4. Maintain test documentation 
+
+## Memory Bank Organization
+
+### Core Memory Files
+1. `systemPatterns.md`: System architecture and design patterns
+2. `techContext.md`: Technical details and implementation specifics
+3. `progress.md`: Project progress tracking and status
+4. `activeContext.md`: Current focus areas and recent changes
+5. `productContext.md`: User-facing features and product details
+6. `projectbrief.md`: Project overview and goals
+
+### When to Update Memory
+1. After implementing a new feature
+2. After fixing a significant bug
+3. After changing architecture or design patterns
+4. After adding new dependencies or technologies
+5. After modifying API structure or behavior 
