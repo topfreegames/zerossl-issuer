@@ -132,9 +132,9 @@ func (r *IssuerReconciler) validateIssuer(issuer *zerosslv1alpha1.Issuer) error 
 		return fmt.Errorf("apiKey in secret %s/%s is empty", secretName.Namespace, secretName.Name)
 	}
 
-	// Validate the API key by making a test request
-	client := zerossl.NewClient(string(apiKey))
-	if err := client.ValidateAPIKey(); err != nil {
+	// Create ZeroSSL client and validate API key
+	zerosslClient := zerossl.NewClient(string(apiKey))
+	if err := zerosslClient.ValidateAPIKey(); err != nil {
 		return fmt.Errorf("invalid API key: %v", err)
 	}
 

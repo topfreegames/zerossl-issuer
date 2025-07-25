@@ -22,6 +22,8 @@ type CertificateResponse struct {
 	ValidationEmails []string `json:"validation_emails,omitempty"`
 	ValidationMethod string   `json:"validation_method,omitempty"`
 	CreatedAt        string   `json:"created_at"`
+	Certificate      string   `json:"certificate,omitempty"`
+	CACertificate    string   `json:"ca_bundle,omitempty"`
 }
 
 // CreateCertificate creates a new SSL certificate
@@ -83,6 +85,32 @@ func (c *Client) GetCertificate(id string) (*CertificateResponse, error) {
 	resp, err := c.httpClient.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get certificate: %v", err)
+	}
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %v", cerr)
+		}
+	}()
+
+	if err := handleResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var certResp CertificateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&certResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	return &certResp, nil
+}
+
+// DownloadCertificate downloads the certificate and CA bundle for a given certificate ID
+func (c *Client) DownloadCertificate(id string) (*CertificateResponse, error) {
+	endpoint := fmt.Sprintf("%s/certificates/%s/download/return?access_key=%s", BaseURL, id, c.apiKey)
+
+	resp, err := c.httpClient.Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download certificate: %v", err)
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil && err == nil {
