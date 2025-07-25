@@ -62,6 +62,13 @@ func Run(cmd *exec.Cmd) (string, error) {
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 func InstallPrometheusOperator() error {
+	// Safety check: only run in Kind clusters
+	if !IsKindCluster() {
+		errMsg := "Refusing to install Prometheus Operator in non-Kind cluster. Current context is not a Kind cluster."
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: %s\n", errMsg)
+		return fmt.Errorf("%s", errMsg)
+	}
+
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	cmd := exec.Command("kubectl", "create", "-f", url)
 	_, err := Run(cmd)
@@ -70,6 +77,12 @@ func InstallPrometheusOperator() error {
 
 // UninstallPrometheusOperator uninstalls the prometheus
 func UninstallPrometheusOperator() {
+	// Safety check: only run in Kind clusters
+	if !IsKindCluster() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Refusing to uninstall Prometheus Operator in non-Kind cluster. Current context is not a Kind cluster.\n")
+		return
+	}
+
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
@@ -104,8 +117,27 @@ func IsPrometheusCRDsInstalled() bool {
 	return false
 }
 
+// IsKindCluster checks if kubectl is currently pointing to a Kind cluster
+func IsKindCluster() bool {
+	// Get current cluster context
+	cmd := exec.Command("kubectl", "config", "current-context")
+	output, err := Run(cmd)
+	if err != nil {
+		return false
+	}
+
+	// Check if the context name starts with "kind-" which indicates a kind cluster
+	return strings.HasPrefix(strings.TrimSpace(output), "kind-")
+}
+
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
+	// Safety check: only run in Kind clusters
+	if !IsKindCluster() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Refusing to uninstall cert-manager in non-Kind cluster. Current context is not a Kind cluster.\n")
+		return
+	}
+
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
@@ -115,6 +147,13 @@ func UninstallCertManager() {
 
 // InstallCertManager installs the cert manager bundle.
 func InstallCertManager() error {
+	// Safety check: only run in Kind clusters
+	if !IsKindCluster() {
+		errMsg := "Refusing to install cert-manager in non-Kind cluster. Current context is not a Kind cluster."
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: %s\n", errMsg)
+		return fmt.Errorf("%s", errMsg)
+	}
+
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "apply", "-f", url)
 	if _, err := Run(cmd); err != nil {

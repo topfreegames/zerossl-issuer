@@ -53,6 +53,10 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	// Safety check: Ensure we're running in a Kind cluster
+	By("verifying we are using a Kind cluster")
+	Expect(utils.IsKindCluster()).To(BeTrue(), "E2E tests must be run on a Kind cluster for safety")
+
 	By("building the manager(Operator) image")
 	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
 	_, err := utils.Run(cmd)
