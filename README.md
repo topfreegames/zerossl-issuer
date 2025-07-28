@@ -21,8 +21,8 @@ This project implements a [cert-manager](https://cert-manager.io) external issue
 
 2. Install the ZeroSSL issuer:
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/ronnansouza/zerossl-issuer/main/config/crd/bases/zerossl.cert-manager.io_issuers.yaml
-   kubectl apply -f https://raw.githubusercontent.com/ronnansouza/zerossl-issuer/main/config/manager/manager.yaml
+   kubectl apply -f https://raw.githubusercontent.com/topfreegames/zerossl-issuer/main/config/crd/bases/zerossl.cert-manager.io_issuers.yaml
+   kubectl apply -f https://raw.githubusercontent.com/topfreegames/zerossl-issuer/main/config/manager/manager.yaml
    ```
 
 ## Configuration
