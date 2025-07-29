@@ -179,7 +179,9 @@ var _ = Describe("Manager", Ordered, func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 
 			// First try to delete the ClusterRoleBinding if it exists
-			deleteCmd := exec.Command("kubectl", "delete", "clusterrolebinding", metricsRoleBindingName, "--ignore-not-found=true")
+			deleteCmd := exec.Command("kubectl", "delete", "clusterrolebinding",
+				metricsRoleBindingName,
+				"--ignore-not-found=true")
 			_, _ = utils.Run(deleteCmd)
 
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,

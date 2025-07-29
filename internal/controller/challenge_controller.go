@@ -39,6 +39,8 @@ import (
 const (
 	// StatusIssued represents the "issued" certificate status from ZeroSSL
 	StatusIssued = "issued"
+	// ChallengeFinalizer is the name of the finalizer used to clean up Route53 DNS records
+	ChallengeFinalizer = "zerossl.cert-manager.io/dns-cleanup"
 )
 
 // ChallengeReconciler reconciles a Challenge object
@@ -77,6 +79,37 @@ func (r *ChallengeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get Challenge: %v", err)
+	}
+
+	// Handle finalizer
+	if challenge.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then add the finalizer and update the object.
+		if !containsString(challenge.GetFinalizers(), ChallengeFinalizer) && challenge.Spec.ValidationMethod == "DNS" {
+			challenge.SetFinalizers(append(challenge.GetFinalizers(), ChallengeFinalizer))
+			if err := r.Update(ctx, challenge); err != nil {
+				return ctrl.Result{}, err
+			}
+			// Return immediately so that the updated object is processed in the next reconcile
+			return ctrl.Result{}, nil
+		}
+	} else {
+		// The object is being deleted
+		if containsString(challenge.GetFinalizers(), ChallengeFinalizer) {
+			// Handle the cleanup of DNS records before allowing the challenge to be deleted
+			if err := r.cleanupDNSRecords(ctx, challenge); err != nil {
+				logger.Error(err, "Failed to clean up DNS records")
+				return ctrl.Result{}, err
+			}
+
+			// Remove our finalizer from the list and update it
+			challenge.SetFinalizers(removeString(challenge.GetFinalizers(), ChallengeFinalizer))
+			if err := r.Update(ctx, challenge); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		// Stop reconciliation as the item is being deleted
+		return ctrl.Result{}, nil
 	}
 
 	// Check if challenge is already completed
@@ -314,6 +347,102 @@ func isChallengeReady(challenge *zerosslv1alpha1.Challenge) bool {
 		}
 	}
 	return false
+}
+
+// Helper functions for finalizers
+// containsString checks if a string is in a slice
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// removeString removes a string from a slice
+func removeString(slice []string, s string) []string {
+	var result []string
+	for _, item := range slice {
+		if item != s {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+// cleanupDNSRecords removes all DNS records created for this challenge
+func (r *ChallengeReconciler) cleanupDNSRecords(ctx context.Context, challenge *zerosslv1alpha1.Challenge) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Cleaning up DNS records for challenge", "namespace", challenge.Namespace, "name", challenge.Name)
+
+	// First, get the issuer to access Route53 configuration
+	issuer, err := r.getIssuerForChallenge(ctx, challenge)
+	if err != nil {
+		return fmt.Errorf("failed to get issuer during cleanup: %v", err)
+	}
+
+	// Delete all validation records
+	for _, record := range challenge.Spec.ValidationRecords {
+		domain := record.Domain
+		solver := findSolverForDomain(issuer, domain)
+
+		if solver == nil || solver.DNS01 == nil || solver.DNS01.Route53 == nil {
+			logger.Info("No Route53 solver found for domain during cleanup", "domain", domain)
+			continue
+		}
+
+		route53Config := solver.DNS01.Route53
+
+		// Delete CNAME record
+		err := r.deleteRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, challenge.Namespace)
+		if err != nil {
+			logger.Error(err, "Failed to delete Route53 CNAME record",
+				"domain", domain,
+				"source", record.CNAMEName,
+				"target", record.CNAMEValue)
+			// Continue with other records even if one fails
+			continue
+		}
+
+		logger.Info("Successfully deleted Route53 CNAME record",
+			"domain", domain,
+			"source", record.CNAMEName,
+			"target", record.CNAMEValue)
+	}
+
+	return nil
+}
+
+// deleteRoute53CNAMERecord deletes a CNAME record from Route53
+func (r *ChallengeReconciler) deleteRoute53CNAMERecord(ctx context.Context, route53Config *zerosslv1alpha1.ACMEChallengeSolverDNS01Route53, source, target string, namespace string) error {
+	logger := log.FromContext(ctx)
+
+	// Create Route53 client
+	r53Client, err := aws.NewRoute53Client(ctx, r.Client, route53Config, namespace)
+	if err != nil {
+		logger.Error(err, "Failed to create Route53 client during cleanup",
+			"region", route53Config.Region,
+			"accessKeyID", route53Config.AccessKeyID)
+		return err
+	}
+
+	// Delete CNAME record
+	err = r53Client.DeleteCNAMERecord(ctx, route53Config.HostedZoneID, source, target)
+	if err != nil {
+		logger.Error(err, "Failed to delete Route53 CNAME record",
+			"hostedZone", route53Config.HostedZoneID,
+			"source", source,
+			"target", target)
+		return err
+	}
+
+	logger.Info("Successfully deleted Route53 CNAME record",
+		"hostedZone", route53Config.HostedZoneID,
+		"source", source,
+		"target", target)
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

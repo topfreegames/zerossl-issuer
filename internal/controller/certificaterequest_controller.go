@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,17 +36,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
 	"github.com/topfreegames/zerossl-issuer/internal/zerossl"
 )
 
 const (
-	// CertificateRequestIDAnnotation is the annotation key for storing the ZeroSSL certificate ID
-	CertificateRequestIDAnnotation = "zerossl.cert-manager.io/certificate-id"
-	// ConditionReady is the type for the Ready condition
-	ConditionReady = "Ready"
+	// RetryAfterValidation is the time to wait between validation checks
+	RetryAfterValidation = 30 * time.Second
 )
 
 // ZeroSSLClient is an interface for the ZeroSSL client
