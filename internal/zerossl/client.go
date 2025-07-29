@@ -111,7 +111,7 @@ func (c *Client) GetValidationData(id string, method ValidationMethod) (*Validat
 
 // VerifyDNSValidation verifies that DNS validation is complete
 func (c *Client) VerifyDNSValidation(id string) error {
-	endpoint := fmt.Sprintf("%s/certificates/%s/challenges/verify?access_key=%s", BaseURL, id, c.apiKey)
+	endpoint := fmt.Sprintf("%s/certificates/%s/challenges?access_key=%s", BaseURL, id, c.apiKey)
 
 	data := url.Values{}
 	data.Set("validation_method", string(ValidationMethodDNS))

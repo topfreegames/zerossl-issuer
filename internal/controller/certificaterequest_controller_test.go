@@ -48,6 +48,7 @@ type mockZeroSSLClient struct {
 	downloadCertificateFunc func(string) (*zerossl.CertificateResponse, error)
 	getValidationDataFunc   func(string, zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
 	verifyDNSValidationFunc func(string) error
+	getCertificateFunc      func(string) (*zerossl.CertificateResponse, error)
 }
 
 func (m *mockZeroSSLClient) CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error) {
@@ -95,6 +96,16 @@ func (m *mockZeroSSLClient) VerifyDNSValidation(id string) error {
 		return m.verifyDNSValidationFunc(id)
 	}
 	return nil
+}
+
+func (m *mockZeroSSLClient) GetCertificate(id string) (*zerossl.CertificateResponse, error) {
+	if m.getCertificateFunc != nil {
+		return m.getCertificateFunc(id)
+	}
+	return &zerossl.CertificateResponse{
+		ID:     "test-cert-id",
+		Status: "issued",
+	}, nil
 }
 
 func generateTestCSR(t *testing.T, commonName string, dnsNames []string) []byte {

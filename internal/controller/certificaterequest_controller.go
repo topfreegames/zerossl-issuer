@@ -52,6 +52,7 @@ type ZeroSSLClient interface {
 	DownloadCertificate(id string) (*zerossl.CertificateResponse, error)
 	GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
 	VerifyDNSValidation(id string) error
+	GetCertificate(id string) (*zerossl.CertificateResponse, error)
 }
 
 // CertificateRequestReconciler reconciles a CertificateRequest object
@@ -307,37 +308,42 @@ func (r *CertificateRequestReconciler) handleExistingCertificate(
 ) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// For existing certificates or when completing DNS validation
-	if useDNS := hasDNSValidator(issuer, domains); useDNS {
-		// Try to verify the DNS validation
-		logger.Info("Verifying DNS validation", "certificate", certID)
-		if err := zerosslClient.VerifyDNSValidation(certID); err != nil {
-			logger.Info("DNS validation not completed yet", "error", err.Error())
-			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-		}
-		logger.Info("DNS validation successful", "certificate", certID)
-	}
-
-	// Download the certificate
-	certResp, err := zerosslClient.DownloadCertificate(certID)
+	// Get certificate status first
+	certInfo, err := zerosslClient.GetCertificate(certID)
 	if err != nil {
-		// If certificate not ready yet, requeue
-		if isNotReadyError(err) {
-			logger.Info("Certificate not ready yet, will requeue", "error", err)
-			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-		}
-
-		setFailureCondition(cr, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate: %v", err))
+		logger.Error(err, "Failed to get certificate status", "certificate", certID)
+		setFailureCondition(cr, "CertificateStatusCheckFailed", fmt.Sprintf("Failed to check certificate status: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// If certificate is empty, it's not ready yet
-	if certResp.Certificate == "" {
-		logger.Info("Certificate not ready yet, will requeue")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	logger.Info("Certificate status check", "certificate", certID, "status", certInfo.Status)
+
+	// For DNS validation certificates, take action based on certificate status
+	if useDNS := hasDNSValidator(issuer, domains); useDNS {
+		if certInfo.Status != "issued" {
+			// Only verify DNS validation for certificates in draft status
+			logger.Info("Verifying DNS validation for draft certificate", "certificate", certID)
+			if err := zerosslClient.VerifyDNSValidation(certID); err != nil {
+				logger.Info("DNS validation verification failed", "error", err.Error())
+				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+			}
+			logger.Info("DNS validation verification successful", "certificate", certID)
+			// After successful verification, requeue to check if status changed
+			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		}
+	}
+
+	// Download the certificate
+	certResp, err := zerosslClient.DownloadCertificate(certID)
+	if err != nil {
+		setFailureCondition(cr, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate: %v", err))
+		if err := r.Status().Update(ctx, cr); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Update the CertificateRequest status with the certificate and CA bundle
