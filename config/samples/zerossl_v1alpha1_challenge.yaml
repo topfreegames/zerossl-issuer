@@ -1,0 +1,15 @@
+apiVersion: zerossl.cert-manager.io/v1alpha1
+kind: Challenge
+metadata:
+  name: example-challenge
+spec:
+  certificateRequestRef: example-cert-request
+  certificateID: 1234567890abcdef
+  validationMethod: DNS
+  validationRecords:
+  - domain: example.com
+    cnameName: _zerossl.example.com
+    cnameValue: xxxxxx.validation.zerossl.com
+  - domain: "*.example.com"
+    cnameName: _zerossl.example.com
+    cnameValue: xxxxxx.validation.zerossl.com 

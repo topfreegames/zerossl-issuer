@@ -39,6 +39,7 @@ rules:
 - apiGroups:
   - zerossl.cert-manager.io
   resources:
+  - challenges
   - issuers
   verbs:
   - create
@@ -51,12 +52,14 @@ rules:
 - apiGroups:
   - zerossl.cert-manager.io
   resources:
+  - challenges/finalizers
   - issuers/finalizers
   verbs:
   - update
 - apiGroups:
   - zerossl.cert-manager.io
   resources:
+  - challenges/status
   - issuers/status
   verbs:
   - get

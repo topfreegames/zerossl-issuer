@@ -42,69 +42,7 @@ import (
 	"github.com/topfreegames/zerossl-issuer/internal/zerossl"
 )
 
-// mockZeroSSLClient is a mock implementation of the ZeroSSL client
-type mockZeroSSLClient struct {
-	createCertificateFunc   func(*zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
-	downloadCertificateFunc func(string) (*zerossl.DownloadCertificateResponse, error)
-	getValidationDataFunc   func(string, zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
-	verifyDNSValidationFunc func(string) error
-	getCertificateFunc      func(string) (*zerossl.CertificateResponse, error)
-}
-
-func (m *mockZeroSSLClient) CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error) {
-	if m.createCertificateFunc != nil {
-		return m.createCertificateFunc(req)
-	}
-	return &zerossl.CertificateResponse{
-		ID:     "test-cert-id",
-		Status: "issued",
-	}, nil
-}
-
-func (m *mockZeroSSLClient) DownloadCertificate(id string) (*zerossl.DownloadCertificateResponse, error) {
-	if m.downloadCertificateFunc != nil {
-		return m.downloadCertificateFunc(id)
-	}
-	return &zerossl.DownloadCertificateResponse{
-		Certificate:   "test-certificate",
-		CACertificate: "test-ca-certificate",
-	}, nil
-}
-
-func (m *mockZeroSSLClient) GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error) {
-	if m.getValidationDataFunc != nil {
-		return m.getValidationDataFunc(id, method)
-	}
-	return &zerossl.ValidationResponse{
-		Success: true,
-		Records: []zerossl.ValidationRecord{
-			{
-				Domain:           "test.example.com",
-				ValidationType:   "dns-01",
-				ValidationMethod: "DNS_CSR_HASH",
-				TXTName:          "_acme-challenge.test.example.com",
-				TXTValue:         "test-validation-token",
-			},
-		},
-	}, nil
-}
-
-func (m *mockZeroSSLClient) VerifyDNSValidation(id string) error {
-	if m.verifyDNSValidationFunc != nil {
-		return m.verifyDNSValidationFunc(id)
-	}
-	return nil
-}
-
-func (m *mockZeroSSLClient) GetCertificate(id string) (*zerossl.CertificateResponse, error) {
-	if m.getCertificateFunc != nil {
-		return m.getCertificateFunc(id)
-	}
-	return &zerossl.CertificateResponse{
-		ID:     "test-cert-id",
-		Status: "issued",
-	}, nil
-}
+// Using shared MockZeroSSLClient from mock_client_test.go
 
 func generateTestCSR(t *testing.T, commonName string, dnsNames []string) []byte {
 	// Generate a private key
@@ -204,18 +142,18 @@ func TestCertificateRequestReconciler(t *testing.T) {
 		Client: client,
 		Scheme: scheme,
 		clientFactory: func(apiKey string) ZeroSSLClient {
-			return &mockZeroSSLClient{
-				createCertificateFunc: func(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error) {
-					return &zerossl.CertificateResponse{
-						ID:     "test-cert-id",
-						Status: "issued",
-					}, nil
+			return &MockZeroSSLClient{
+				CreateCertificateResp: &zerossl.CertificateResponse{
+					ID:     "test-cert-id",
+					Status: "issued",
 				},
-				downloadCertificateFunc: func(id string) (*zerossl.DownloadCertificateResponse, error) {
-					return &zerossl.DownloadCertificateResponse{
-						Certificate:   "test-certificate",
-						CACertificate: "test-ca-certificate",
-					}, nil
+				DownloadCertificateResp: &zerossl.DownloadCertificateResponse{
+					Certificate:   "test-certificate",
+					CACertificate: "test-ca-certificate",
+				},
+				GetCertificateResp: &zerossl.CertificateResponse{
+					ID:     "test-cert-id",
+					Status: "issued",
 				},
 			}
 		},
@@ -489,4 +427,49 @@ func TestIsNotReadyError(t *testing.T) {
 	assert.True(t, isNotReadyError(fmt.Errorf("still pending")))
 	assert.True(t, isNotReadyError(fmt.Errorf("validation in progress")))
 	assert.False(t, isNotReadyError(fmt.Errorf("some other error")))
+}
+
+// TestEmptyValidationMap tests handling of empty validation maps
+func TestEmptyValidationMap(t *testing.T) {
+	// Create a certificate info with empty validation map
+	certInfo := &zerossl.CertificateResponse{
+		ID:         "test-cert-id",
+		Status:     "pending_validation",
+		Validation: make(zerossl.ValidationInfo),
+	}
+
+	// Test the getDomains function
+	domains := getDomains(certInfo)
+	assert.Equal(t, 0, len(domains), "Empty validation map should return zero domains")
+
+	// Create an issuer for testing
+	issuer := &zerosslv1alpha1.Issuer{
+		Spec: zerosslv1alpha1.IssuerSpec{
+			Solvers: []zerosslv1alpha1.ACMESolver{
+				{
+					Selector: &zerosslv1alpha1.ACMESolverSelector{
+						DNSZones: []string{"example.com"},
+					},
+					DNS01: &zerosslv1alpha1.ACMEChallengeSolverDNS01{
+						Route53: &zerosslv1alpha1.ACMEChallengeSolverDNS01Route53{
+							Region:       "us-east-1",
+							HostedZoneID: "ZONE1",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Test the validation record extraction
+	validationRecords := []zerosslv1alpha1.ValidationRecord{}
+	for _, domain := range getDomains(certInfo) {
+		if solver := findSolverForDomain(issuer, domain); solver != nil && solver.DNS01 != nil {
+			// No domains to process, so this loop should not execute
+			t.Errorf("Expected no domains, but found domain: %s", domain)
+		}
+	}
+
+	// Verification
+	assert.Equal(t, 0, len(validationRecords), "Should have zero validation records from empty validation map")
 }

@@ -1,0 +1,138 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: challenges.zerossl.cert-manager.io
+spec:
+  group: zerossl.cert-manager.io
+  names:
+    kind: Challenge
+    listKind: ChallengeList
+    plural: challenges
+    singular: challenge
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Status of the challenge
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Status
+      type: string
+    - description: Validation method
+      jsonPath: .spec.validationMethod
+      name: Method
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Challenge is the Schema for the challenges API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ChallengeSpec defines the desired state of Challenge
+            properties:
+              certificateID:
+                description: CertificateID is the ZeroSSL certificate ID
+                type: string
+              certificateRequestRef:
+                description: CertificateRequestRef is a reference to the CertificateRequest
+                  that this challenge is for
+                type: string
+              validationMethod:
+                description: ValidationMethod is the validation method used for this
+                  challenge
+                enum:
+                - DNS
+                type: string
+              validationRecords:
+                description: ValidationRecords contains the validation records for
+                  this challenge
+                items:
+                  description: ValidationRecord contains the validation data for a
+                    single domain
+                  properties:
+                    cnameName:
+                      description: CNAMEName is the name of the CNAME record
+                      type: string
+                    cnameValue:
+                      description: CNAMEValue is the value of the CNAME record
+                      type: string
+                    domain:
+                      description: Domain is the domain being validated
+                      type: string
+                  required:
+                  - cnameName
+                  - cnameValue
+                  - domain
+                  type: object
+                type: array
+            required:
+            - certificateID
+            - certificateRequestRef
+            - validationMethod
+            type: object
+          status:
+            description: ChallengeStatus defines the observed state of Challenge
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the challenge state
+                items:
+                  description: ChallengeCondition contains condition information for
+                    a Challenge
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the timestamp corresponding
+                        to the last status change of this condition
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable description of the
+                        details of the last transition
+                      type: string
+                    reason:
+                      description: Reason is a brief machine readable explanation
+                        for the condition's last transition
+                      type: string
+                    status:
+                      description: Status of the condition, one of ('True', 'False',
+                        'Unknown')
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: Type of the condition
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -16,15 +16,29 @@ type CertificateRequest struct {
 	ValidationMethod ValidationMethod `json:"validation_method,omitempty"`
 }
 
+// ValidationDetails contains validation method details
+type ValidationDetails struct {
+	OtherMethods struct {
+		CNAMEValidationP1      string `json:"cname_validation_p1"`
+		CNAMEValidationP2      string `json:"cname_validation_p2"`
+		FileValidationURLHttp  string `json:"file_validation_url_http"`
+		FileValidationURLHttps string `json:"file_validation_url_https"`
+	} `json:"other_methods"`
+}
+
+// ValidationInfo contains validation information per domain
+type ValidationInfo map[string]ValidationDetails
+
 // CertificateResponse represents the response from creating a certificate
 type CertificateResponse struct {
-	ID               string `json:"id"`
-	Status           string `json:"status"`
-	ValidationEmails string `json:"validation_emails,omitempty"`
-	ValidationMethod string `json:"validation_method,omitempty"`
-	CreatedAt        string `json:"created_at"`
-	Certificate      string `json:"certificate,omitempty"`
-	CACertificate    string `json:"ca_bundle,omitempty"`
+	ID               string         `json:"id"`
+	Status           string         `json:"status"`
+	ValidationEmails string         `json:"validation_emails,omitempty"`
+	ValidationMethod string         `json:"validation_method,omitempty"`
+	Validation       ValidationInfo `json:"validation,omitempty"`
+	CreatedAt        string         `json:"created_at"`
+	Certificate      string         `json:"certificate,omitempty"`
+	CACertificate    string         `json:"ca_bundle,omitempty"`
 }
 
 // DownloadCertificateResponse represents the response from downloading a certificate

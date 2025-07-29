@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/zerossl.cert-manager.io_issuers.yaml
+- bases/zerossl.cert-manager.io_challenges.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
