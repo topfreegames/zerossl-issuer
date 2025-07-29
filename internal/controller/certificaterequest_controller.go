@@ -49,7 +49,7 @@ const (
 // ZeroSSLClient is an interface for the ZeroSSL client
 type ZeroSSLClient interface {
 	CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
-	DownloadCertificate(id string) (*zerossl.CertificateResponse, error)
+	DownloadCertificate(id string) (*zerossl.DownloadCertificateResponse, error)
 	GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
 	VerifyDNSValidation(id string) error
 	GetCertificate(id string) (*zerossl.CertificateResponse, error)
@@ -337,7 +337,7 @@ func (r *CertificateRequestReconciler) handleExistingCertificate(
 	}
 
 	// Download the certificate
-	certResp, err := zerosslClient.DownloadCertificate(certID)
+	downloadResp, err := zerosslClient.DownloadCertificate(certID)
 	if err != nil {
 		setFailureCondition(cr, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
@@ -347,11 +347,15 @@ func (r *CertificateRequestReconciler) handleExistingCertificate(
 	}
 
 	// Update the CertificateRequest status with the certificate and CA bundle
-	cr.Status.Certificate = []byte(certResp.Certificate)
-	cr.Status.CA = []byte(certResp.CACertificate)
+	// Format certificate chain as leaf + intermediate
+	certificateChain := downloadResp.Certificate
+	if downloadResp.CACertificate != "" {
+		certificateChain = certificateChain + "\n" + downloadResp.CACertificate
+	}
+	cr.Status.Certificate = []byte(certificateChain)
 
 	// Set the Ready condition
-	setReadyCondition(cr, "CertificateIssued", "Certificate has been issued successfully")
+	setReadyCondition(cr, "Issued", "Certificate has been issued successfully")
 	if err := r.Status().Update(ctx, cr); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 	}
@@ -398,6 +402,22 @@ func isIssuerReady(issuer *zerosslv1alpha1.Issuer) bool {
 
 func setFailureCondition(cr *cmapi.CertificateRequest, reason, message string) {
 	now := metav1.Now()
+
+	// Check if there's already a Ready condition and update it
+	for i, condition := range cr.Status.Conditions {
+		if condition.Type == ConditionReady {
+			cr.Status.Conditions[i] = cmapi.CertificateRequestCondition{
+				Type:               ConditionReady,
+				Status:             cmmeta.ConditionFalse,
+				Reason:             reason,
+				Message:            message,
+				LastTransitionTime: &now,
+			}
+			return
+		}
+	}
+
+	// If no Ready condition exists, append a new one
 	cr.Status.Conditions = append(cr.Status.Conditions, cmapi.CertificateRequestCondition{
 		Type:               ConditionReady,
 		Status:             cmmeta.ConditionFalse,
@@ -409,6 +429,22 @@ func setFailureCondition(cr *cmapi.CertificateRequest, reason, message string) {
 
 func setReadyCondition(cr *cmapi.CertificateRequest, reason, message string) {
 	now := metav1.Now()
+
+	// Check if there's already a Ready condition and update it
+	for i, condition := range cr.Status.Conditions {
+		if condition.Type == ConditionReady {
+			cr.Status.Conditions[i] = cmapi.CertificateRequestCondition{
+				Type:               ConditionReady,
+				Status:             cmmeta.ConditionTrue,
+				Reason:             reason,
+				Message:            message,
+				LastTransitionTime: &now,
+			}
+			return
+		}
+	}
+
+	// If no Ready condition exists, append a new one
 	cr.Status.Conditions = append(cr.Status.Conditions, cmapi.CertificateRequestCondition{
 		Type:               ConditionReady,
 		Status:             cmmeta.ConditionTrue,

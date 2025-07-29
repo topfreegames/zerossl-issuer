@@ -45,7 +45,7 @@ import (
 // mockZeroSSLClient is a mock implementation of the ZeroSSL client
 type mockZeroSSLClient struct {
 	createCertificateFunc   func(*zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
-	downloadCertificateFunc func(string) (*zerossl.CertificateResponse, error)
+	downloadCertificateFunc func(string) (*zerossl.DownloadCertificateResponse, error)
 	getValidationDataFunc   func(string, zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
 	verifyDNSValidationFunc func(string) error
 	getCertificateFunc      func(string) (*zerossl.CertificateResponse, error)
@@ -61,13 +61,11 @@ func (m *mockZeroSSLClient) CreateCertificate(req *zerossl.CertificateRequest) (
 	}, nil
 }
 
-func (m *mockZeroSSLClient) DownloadCertificate(id string) (*zerossl.CertificateResponse, error) {
+func (m *mockZeroSSLClient) DownloadCertificate(id string) (*zerossl.DownloadCertificateResponse, error) {
 	if m.downloadCertificateFunc != nil {
 		return m.downloadCertificateFunc(id)
 	}
-	return &zerossl.CertificateResponse{
-		ID:            "test-cert-id",
-		Status:        "issued",
+	return &zerossl.DownloadCertificateResponse{
 		Certificate:   "test-certificate",
 		CACertificate: "test-ca-certificate",
 	}, nil
@@ -213,10 +211,8 @@ func TestCertificateRequestReconciler(t *testing.T) {
 						Status: "issued",
 					}, nil
 				},
-				downloadCertificateFunc: func(id string) (*zerossl.CertificateResponse, error) {
-					return &zerossl.CertificateResponse{
-						ID:            "test-cert-id",
-						Status:        "issued",
+				downloadCertificateFunc: func(id string) (*zerossl.DownloadCertificateResponse, error) {
+					return &zerossl.DownloadCertificateResponse{
 						Certificate:   "test-certificate",
 						CACertificate: "test-ca-certificate",
 					}, nil
@@ -268,15 +264,16 @@ func TestCertificateRequestReconciler(t *testing.T) {
 	for _, cond := range updatedCR.Status.Conditions {
 		if cond.Type == "Ready" {
 			readyCondition = &cond
-			break
 		}
 	}
 	require.NotNil(t, readyCondition, "Ready condition not found, available conditions: %v", updatedCR.Status.Conditions)
 	assert.Equal(t, cmmeta.ConditionTrue, readyCondition.Status)
+	assert.Equal(t, "Issued", readyCondition.Reason)
 
-	// Check that the certificate and CA were set
-	assert.Equal(t, []byte("test-certificate"), updatedCR.Status.Certificate)
-	assert.Equal(t, []byte("test-ca-certificate"), updatedCR.Status.CA)
+	// Check that the certificate contains both the leaf and intermediate certificate
+	expectedCertificateChain := "test-certificate\ntest-ca-certificate"
+	assert.Equal(t, []byte(expectedCertificateChain), updatedCR.Status.Certificate)
+	// The CA field is not set anymore as it's included in the certificate chain
 }
 
 func TestGetDNSNamesFromCSR(t *testing.T) {
