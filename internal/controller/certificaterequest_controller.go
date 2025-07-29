@@ -51,7 +51,7 @@ const (
 type ZeroSSLClient interface {
 	CreateCertificate(req *zerossl.CertificateRequest) (*zerossl.CertificateResponse, error)
 	DownloadCertificate(id string) (*zerossl.DownloadCertificateResponse, error)
-	GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error)
+	InitiateValidation(id string, method zerossl.ValidationMethod) (*zerossl.CertificateResponse, error)
 	VerifyDNSValidation(id string) error
 	GetCertificate(id string) (*zerossl.CertificateResponse, error)
 }
@@ -274,10 +274,10 @@ func (r *CertificateRequestReconciler) handleDNSValidation(
 ) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Get validation data for DNS
-	validationResp, err := zerosslClient.GetValidationData(certID, zerossl.ValidationMethodDNS)
+	// Get certificate information to extract validation requirements
+	certInfo, err := zerosslClient.GetCertificate(certID)
 	if err != nil {
-		setFailureCondition(cr, "ValidationDataFailed", fmt.Sprintf("Failed to get validation data: %v", err))
+		setFailureCondition(cr, "ValidationDataFailed", fmt.Sprintf("Failed to get certificate info: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 		}
@@ -286,12 +286,18 @@ func (r *CertificateRequestReconciler) handleDNSValidation(
 
 	// Log validation records for DNS solver to create
 	logger.Info("DNS validation required", "certificate", certID)
-	for _, record := range validationResp.Records {
-		logger.Info("DNS validation record",
-			"domain", record.Domain,
-			"type", record.ValidationType,
-			"txtName", record.TXTName,
-			"txtValue", record.TXTValue)
+	if certInfo.Validation.OtherMethods != nil {
+		for domain, validationDetails := range certInfo.Validation.OtherMethods {
+			cnameSource := validationDetails.CNAMEValidationP1
+			cnameTarget := validationDetails.CNAMEValidationP2
+
+			if cnameSource != "" && cnameTarget != "" {
+				logger.Info("CNAME validation record",
+					"domain", domain,
+					"cnameSource", cnameSource,
+					"cnameTarget", cnameTarget)
+			}
+		}
 	}
 
 	// DNS records need to be created externally, so we'll requeue for later
@@ -324,12 +330,12 @@ func (r *CertificateRequestReconciler) handleExistingCertificate(
 
 	// For DNS validation certificates, handle challenge resource
 	useDNS := hasDNSValidator(issuer, domains)
-	if useDNS && certInfo.Status != "issued" {
+	if useDNS && certInfo.Status != StatusIssued {
 		return r.handleChallengeResource(ctx, cr, issuer, zerosslClient, certID)
 	}
 
 	// If certificate is issued or using HTTP validation, download it
-	if certInfo.Status == "issued" {
+	if certInfo.Status == StatusIssued {
 		return r.downloadAndFinalizeCertificate(ctx, cr, zerosslClient, certID)
 	}
 
@@ -379,14 +385,14 @@ func (r *CertificateRequestReconciler) handleChallengeResource(
 			validationRecords := []zerosslv1alpha1.ValidationRecord{}
 
 			// Extract CNAME validation data from certificate info
-			for domain, validation := range certInfo.Validation {
+			for domain, validationDetails := range certInfo.Validation.OtherMethods {
 				// Skip domains that don't have Route53 solver configured
 				if _, ok := domainToSolver[domain]; !ok {
 					continue
 				}
 
-				cnameSource := validation.OtherMethods.CNAMEValidationP1
-				cnameTarget := validation.OtherMethods.CNAMEValidationP2
+				cnameSource := validationDetails.CNAMEValidationP1
+				cnameTarget := validationDetails.CNAMEValidationP2
 
 				if cnameSource != "" && cnameTarget != "" {
 					record := zerosslv1alpha1.ValidationRecord{
@@ -478,7 +484,7 @@ func (r *CertificateRequestReconciler) handleChallengeResource(
 			return ctrl.Result{}, nil
 		}
 
-		if certInfo.Status == "issued" {
+		if certInfo.Status == StatusIssued {
 			return r.downloadAndFinalizeCertificate(ctx, cr, zerosslClient, certID)
 		}
 
@@ -720,35 +726,23 @@ func hasDNSValidator(issuer *zerosslv1alpha1.Issuer, domains []string) bool {
 	return false
 }
 
-// isNotReadyError checks if an error indicates that the certificate is not ready yet
-func isNotReadyError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errorMsg := err.Error()
-	// Add specific ZeroSSL error messages that indicate certificate not ready yet
-	notReadyIndicators := []string{
-		"certificate is not issued yet",
-		"still being processed",
-		"still pending",
-		"validation in progress",
-	}
-
-	for _, indicator := range notReadyIndicators {
-		if strings.Contains(strings.ToLower(errorMsg), strings.ToLower(indicator)) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // getDomains extracts domain names from certificate validation info
 func getDomains(certInfo *zerossl.CertificateResponse) []string {
 	domains := []string{}
-	for domain := range certInfo.Validation {
-		domains = append(domains, domain)
+
+	// Check email validation domains
+	if certInfo.Validation.EmailValidation != nil {
+		for domain := range certInfo.Validation.EmailValidation {
+			domains = append(domains, domain)
+		}
 	}
+
+	// Check other methods domains
+	if certInfo.Validation.OtherMethods != nil {
+		for domain := range certInfo.Validation.OtherMethods {
+			domains = append(domains, domain)
+		}
+	}
+
 	return domains
 }

@@ -19,15 +19,35 @@ type CertificateRequest struct {
 // ValidationDetails contains validation method details
 type ValidationDetails struct {
 	OtherMethods struct {
-		CNAMEValidationP1      string `json:"cname_validation_p1"`
-		CNAMEValidationP2      string `json:"cname_validation_p2"`
-		FileValidationURLHttp  string `json:"file_validation_url_http"`
-		FileValidationURLHttps string `json:"file_validation_url_https"`
+		CNAMEValidationP1      string   `json:"cname_validation_p1"`
+		CNAMEValidationP2      string   `json:"cname_validation_p2"`
+		FileValidationURLHttp  string   `json:"file_validation_url_http"`
+		FileValidationURLHttps string   `json:"file_validation_url_https"`
+		FileValidationContent  []string `json:"file_validation_content,omitempty"`
 	} `json:"other_methods"`
+	EmailValidation map[string][]string `json:"email_validation,omitempty"`
+}
+
+// ValidationMethods contains different validation method types
+type ValidationMethods struct {
+	EmailValidation map[string][]string          `json:"email_validation"`
+	OtherMethods    map[string]ValidationDetails `json:"other_methods"`
+}
+
+// ValidationOtherMethodDetails contains details for other validation methods
+type ValidationOtherMethodDetails struct {
+	CNAMEValidationP1      string   `json:"cname_validation_p1"`
+	CNAMEValidationP2      string   `json:"cname_validation_p2"`
+	FileValidationURLHttp  string   `json:"file_validation_url_http"`
+	FileValidationURLHttps string   `json:"file_validation_url_https"`
+	FileValidationContent  []string `json:"file_validation_content,omitempty"`
 }
 
 // ValidationInfo contains validation information per domain
-type ValidationInfo map[string]ValidationDetails
+type ValidationInfo struct {
+	EmailValidation map[string][]string                     `json:"email_validation"`
+	OtherMethods    map[string]ValidationOtherMethodDetails `json:"other_methods"`
+}
 
 // CertificateResponse represents the response from creating a certificate
 type CertificateResponse struct {

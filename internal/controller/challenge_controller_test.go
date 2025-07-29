@@ -80,7 +80,7 @@ var _ = Describe("Challenge Controller", func() {
 			// Verify that the created Challenge has the expected values
 			Expect(createdChallenge.Spec.CertificateID).Should(Equal(CertificateID))
 			Expect(createdChallenge.Spec.ValidationMethod).Should(Equal("DNS"))
-			Expect(len(createdChallenge.Spec.ValidationRecords)).Should(Equal(1))
+			Expect(createdChallenge.Spec.ValidationRecords).Should(HaveLen(1))
 			Expect(createdChallenge.Spec.ValidationRecords[0].Domain).Should(Equal("example.com"))
 		})
 	})
@@ -97,10 +97,10 @@ var _ = Describe("Challenge Controller", func() {
 
 			// Test the mock client
 			err := mockClient.VerifyDNSValidation("test-id")
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			resp, err := mockClient.GetCertificate("test-id")
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.Status).To(Equal("issued"))
 		})
 	})

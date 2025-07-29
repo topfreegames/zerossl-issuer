@@ -86,11 +86,11 @@ type ChallengeCondition struct {
 	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Status of the challenge"
-//+kubebuilder:printcolumn:name="Method",type="string",JSONPath=".spec.validationMethod",description="Validation method"
-//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Status of the challenge"
+// +kubebuilder:printcolumn:name="Method",type="string",JSONPath=".spec.validationMethod",description="Validation method"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Challenge is the Schema for the challenges API
 type Challenge struct {
@@ -101,7 +101,7 @@ type Challenge struct {
 	Status ChallengeStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ChallengeList contains a list of Challenge
 type ChallengeList struct {

@@ -28,8 +28,8 @@ type MockZeroSSLClient struct {
 	DownloadCertificateResp *zerossl.DownloadCertificateResponse
 	DownloadCertificateErr  error
 
-	GetValidationDataResp *zerossl.ValidationResponse
-	GetValidationDataErr  error
+	InitiateValidationResp *zerossl.CertificateResponse
+	InitiateValidationErr  error
 
 	VerifyDNSValidationErr error
 
@@ -49,12 +49,16 @@ func (m *MockZeroSSLClient) CreateCertificate(req *zerossl.CertificateRequest) (
 	}
 
 	// Default response with CNAME validation
-	validation := make(zerossl.ValidationInfo)
+	validation := zerossl.ValidationInfo{
+		EmailValidation: make(map[string][]string),
+		OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),
+	}
+
 	for _, domain := range req.Domains {
-		details := zerossl.ValidationDetails{}
-		details.OtherMethods.CNAMEValidationP1 = "_zerossl." + domain
-		details.OtherMethods.CNAMEValidationP2 = "verify.zerossl.com"
-		validation[domain] = details
+		validation.OtherMethods[domain] = zerossl.ValidationOtherMethodDetails{
+			CNAMEValidationP1: "_zerossl." + domain,
+			CNAMEValidationP2: "verify.zerossl.com",
+		}
 	}
 
 	return &zerossl.CertificateResponse{
@@ -81,27 +85,33 @@ func (m *MockZeroSSLClient) DownloadCertificate(id string) (*zerossl.DownloadCer
 	}, nil
 }
 
-// GetValidationData mocks the GetValidationData method
-func (m *MockZeroSSLClient) GetValidationData(id string, method zerossl.ValidationMethod) (*zerossl.ValidationResponse, error) {
-	if m.GetValidationDataErr != nil {
-		return nil, m.GetValidationDataErr
+// InitiateValidation mocks the InitiateValidation method
+func (m *MockZeroSSLClient) InitiateValidation(id string, method zerossl.ValidationMethod) (*zerossl.CertificateResponse, error) {
+	if m.InitiateValidationErr != nil {
+		return nil, m.InitiateValidationErr
 	}
 
 	// Use provided response or create a default one
-	if m.GetValidationDataResp != nil {
-		return m.GetValidationDataResp, nil
+	if m.InitiateValidationResp != nil {
+		return m.InitiateValidationResp, nil
 	}
 
-	return &zerossl.ValidationResponse{
-		Success: true,
-		Records: []zerossl.ValidationRecord{
-			{
-				Domain:         "test.example.com",
-				ValidationType: "TXT",
-				TXTName:        "_acme-challenge.test.example.com",
-				TXTValue:       "test-validation-token",
-			},
-		},
+	// Default response with CNAME validation
+	domain := "test.example.com"
+	validation := zerossl.ValidationInfo{
+		EmailValidation: make(map[string][]string),
+		OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),
+	}
+
+	validation.OtherMethods[domain] = zerossl.ValidationOtherMethodDetails{
+		CNAMEValidationP1: "_zerossl." + domain,
+		CNAMEValidationP2: "verify.zerossl.com",
+	}
+
+	return &zerossl.CertificateResponse{
+		ID:         id,
+		Status:     "pending_validation",
+		Validation: validation,
 	}, nil
 }
 
@@ -122,12 +132,16 @@ func (m *MockZeroSSLClient) GetCertificate(id string) (*zerossl.CertificateRespo
 	}
 
 	// Default response with CNAME validation
-	validation := make(zerossl.ValidationInfo)
 	domain := "test.example.com"
-	details := zerossl.ValidationDetails{}
-	details.OtherMethods.CNAMEValidationP1 = "_zerossl." + domain
-	details.OtherMethods.CNAMEValidationP2 = "verify.zerossl.com"
-	validation[domain] = details
+	validation := zerossl.ValidationInfo{
+		EmailValidation: make(map[string][]string),
+		OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),
+	}
+
+	validation.OtherMethods[domain] = zerossl.ValidationOtherMethodDetails{
+		CNAMEValidationP1: "_zerossl." + domain,
+		CNAMEValidationP2: "verify.zerossl.com",
+	}
 
 	return &zerossl.CertificateResponse{
 		ID:         "test-cert-id",

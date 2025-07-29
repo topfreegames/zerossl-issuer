@@ -58,7 +58,7 @@ const (
 	// ValidationMethodHTTP represents HTTP validation method
 	ValidationMethodHTTP ValidationMethod = "HTTP_CSR_HASH"
 	// ValidationMethodDNS represents DNS validation method
-	ValidationMethodDNS ValidationMethod = "DNS_CSR_HASH"
+	ValidationMethodDNS ValidationMethod = "CNAME_CSR_HASH"
 )
 
 // ValidationRecord represents a domain validation record
@@ -79,53 +79,26 @@ type ValidationResponse struct {
 	Records []ValidationRecord `json:"domains,omitempty"`
 }
 
-// GetValidationData gets the validation data for a certificate
-func (c *Client) GetValidationData(id string, method ValidationMethod) (*ValidationResponse, error) {
-	endpoint := fmt.Sprintf("%s/certificates/%s/challenges?access_key=%s&validation_method=%s",
-		BaseURL, id, c.apiKey, method)
-
-	resp, err := c.httpClient.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get validation data: %v", err)
-	}
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("error closing response body: %v", cerr)
-		}
-	}()
-
-	var validationResp ValidationResponse
-	if err := json.NewDecoder(resp.Body).Decode(&validationResp); err != nil {
-		return nil, fmt.Errorf("failed to decode validation response: %v", err)
-	}
-
-	if !validationResp.Success {
-		if validationResp.Error != nil {
-			return nil, validationResp.Error
-		}
-		return nil, fmt.Errorf("validation request failed without specific error")
-	}
-
-	return &validationResp, nil
-}
-
-// VerifyDNSValidation verifies that DNS validation is complete
-func (c *Client) VerifyDNSValidation(id string) error {
+// InitiateValidation initiates validation for a certificate using the specified method
+func (c *Client) InitiateValidation(id string, method ValidationMethod) (*CertificateResponse, error) {
 	endpoint := fmt.Sprintf("%s/certificates/%s/challenges?access_key=%s", BaseURL, id, c.apiKey)
 
-	data := url.Values{}
-	data.Set("validation_method", string(ValidationMethodDNS))
+	// Build form data for POST request
+	formData := url.Values{}
+	formData.Add("validation_method", string(method))
 
-	req, err := http.NewRequest("POST", endpoint, strings.NewReader(data.Encode()))
+	// Create request
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(formData.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create verification request: %v", err)
+		return nil, fmt.Errorf("failed to create validation request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send verification request: %v", err)
+		return nil, fmt.Errorf("failed to send validation request: %v", err)
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil && err == nil {
@@ -133,22 +106,35 @@ func (c *Client) VerifyDNSValidation(id string) error {
 		}
 	}()
 
-	var verifyResp struct {
-		Success bool   `json:"success"`
-		Error   *Error `json:"error,omitempty"`
+	if err := handleResponse(resp); err != nil {
+		return nil, fmt.Errorf("validation request failed: %v", err)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil {
-		return fmt.Errorf("failed to decode verification response: %v", err)
+	// For CNAME validation, the API returns the certificate object
+	var certResp CertificateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&certResp); err != nil {
+		return nil, fmt.Errorf("failed to decode validation response: %v", err)
 	}
 
-	if !verifyResp.Success {
-		if verifyResp.Error != nil {
-			return verifyResp.Error
-		}
-		return fmt.Errorf("verification failed without specific error")
+	return &certResp, nil
+}
+
+// VerifyDNSValidation verifies that DNS validation is complete
+func (c *Client) VerifyDNSValidation(id string) error {
+	// Use the same endpoint as InitiateValidation to verify the DNS records
+	// This actually initiates the validation process after the DNS records have been created
+	certResp, err := c.InitiateValidation(id, ValidationMethodDNS)
+	if err != nil {
+		return fmt.Errorf("failed to verify DNS validation: %v", err)
 	}
 
+	// If we get a successful response, check if the certificate status changed
+	if certResp.Status == "issued" {
+		return nil
+	}
+
+	// If the status is not "issued", we need to wait for the validation to complete
+	// This is not an error, just means the validation is still in progress
 	return nil
 }
 

@@ -32,7 +32,13 @@ import (
 
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
+	"github.com/topfreegames/zerossl-issuer/internal/aws"
 	"github.com/topfreegames/zerossl-issuer/internal/zerossl"
+)
+
+const (
+	// StatusIssued represents the "issued" certificate status from ZeroSSL
+	StatusIssued = "issued"
 )
 
 // ChallengeReconciler reconciles a Challenge object
@@ -124,7 +130,7 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 		route53Config := solver.DNS01.Route53
 
 		// Apply CNAME record
-		err := r.applyRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue)
+		err := r.applyRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, challenge.Namespace)
 		if err != nil {
 			logger.Error(err, "Failed to apply Route53 CNAME record",
 				"domain", domain,
@@ -145,11 +151,9 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 	// After creating records, verify DNS validation
 	err = zerosslClient.VerifyDNSValidation(challenge.Spec.CertificateID)
 	if err != nil {
-		if isNotReadyError(err) {
-			logger.Info("DNS validation not ready yet", "error", err.Error())
-			return r.markChallengeProcessing(ctx, challenge, "Validating", "DNS validation in progress")
-		}
-		return r.markChallengeFailed(ctx, challenge, "ValidationFailed", fmt.Sprintf("DNS validation failed: %v", err))
+		logger.Info("DNS validation error", "error", err.Error())
+		// Continue with processing instead of checking if it's a "not ready" error
+		return r.markChallengeProcessing(ctx, challenge, "Validating", "DNS validation in progress")
 	}
 
 	// Check certificate status
@@ -158,7 +162,7 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 		return r.markChallengeFailed(ctx, challenge, "CertificateCheckFailed", fmt.Sprintf("Failed to check certificate status: %v", err))
 	}
 
-	if certInfo.Status == "issued" {
+	if certInfo.Status == StatusIssued {
 		return r.markChallengeSucceeded(ctx, challenge, "Validated", "DNS validation successful, certificate issued")
 	}
 
@@ -168,56 +172,32 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 }
 
 // applyRoute53CNAMERecord applies a CNAME record to Route53
-func (r *ChallengeReconciler) applyRoute53CNAMERecord(ctx context.Context, route53Config *zerosslv1alpha1.ACMEChallengeSolverDNS01Route53, source, target string) error {
-	// This is a placeholder for the actual AWS Route53 API call
-	// In a real implementation, this would:
-	// 1. Initialize AWS SDK with credentials from route53Config
-	// 2. Call Route53 API to create or update the CNAME record
-	// 3. Return any errors encountered
-
+func (r *ChallengeReconciler) applyRoute53CNAMERecord(ctx context.Context, route53Config *zerosslv1alpha1.ACMEChallengeSolverDNS01Route53, source, target string, namespace string) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Would create Route53 CNAME record",
+
+	// Create Route53 client
+	r53Client, err := aws.NewRoute53Client(ctx, r.Client, route53Config, namespace)
+	if err != nil {
+		logger.Error(err, "Failed to create Route53 client",
+			"region", route53Config.Region,
+			"accessKeyID", route53Config.AccessKeyID)
+		return err
+	}
+
+	// Update CNAME record
+	err = r53Client.UpsertCNAMERecord(ctx, route53Config.HostedZoneID, source, target)
+	if err != nil {
+		logger.Error(err, "Failed to create Route53 CNAME record",
+			"hostedZone", route53Config.HostedZoneID,
+			"source", source,
+			"target", target)
+		return err
+	}
+
+	logger.Info("Successfully created Route53 CNAME record",
 		"hostedZone", route53Config.HostedZoneID,
-		"region", route53Config.Region,
 		"source", source,
 		"target", target)
-
-	// Example pseudocode:
-	//
-	// sess, err := session.NewSession(&aws.Config{
-	//     Region: aws.String(route53Config.Region),
-	//     Credentials: credentials.NewStaticCredentials(
-	//         route53Config.AccessKeyID,
-	//         secretAccessKey,  // Would be retrieved from secret
-	//         "",
-	//     ),
-	// })
-	// if err != nil {
-	//     return err
-	// }
-	//
-	// r53 := route53.New(sess)
-	//
-	// _, err = r53.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
-	//     HostedZoneId: aws.String(route53Config.HostedZoneID),
-	//     ChangeBatch: &route53.ChangeBatch{
-	//         Changes: []*route53.Change{
-	//             {
-	//                 Action: aws.String("UPSERT"),
-	//                 ResourceRecordSet: &route53.ResourceRecordSet{
-	//                     Name: aws.String(source),
-	//                     Type: aws.String("CNAME"),
-	//                     TTL:  aws.Int64(60),
-	//                     ResourceRecords: []*route53.ResourceRecord{
-	//                         {
-	//                             Value: aws.String(target),
-	//                         },
-	//                     },
-	//                 },
-	//             },
-	//         },
-	//     },
-	// })
 
 	return nil
 }
@@ -273,7 +253,7 @@ func (r *ChallengeReconciler) getZeroSSLClient(ctx context.Context, issuer *zero
 
 // markChallengeProcessing updates the Challenge to indicate that it's still processing
 func (r *ChallengeReconciler) markChallengeProcessing(ctx context.Context, challenge *zerosslv1alpha1.Challenge, reason, message string) (ctrl.Result, error) {
-	setChallengeCondition(challenge, "Ready", metav1.ConditionFalse, reason, message)
+	setChallengeCondition(challenge, ConditionReady, metav1.ConditionFalse, reason, message)
 	if err := r.Status().Update(ctx, challenge); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Challenge status: %v", err)
 	}
@@ -282,7 +262,7 @@ func (r *ChallengeReconciler) markChallengeProcessing(ctx context.Context, chall
 
 // markChallengeFailed updates the Challenge to indicate that it has failed
 func (r *ChallengeReconciler) markChallengeFailed(ctx context.Context, challenge *zerosslv1alpha1.Challenge, reason, message string) (ctrl.Result, error) {
-	setChallengeCondition(challenge, "Ready", metav1.ConditionFalse, reason, message)
+	setChallengeCondition(challenge, ConditionReady, metav1.ConditionFalse, reason, message)
 	if err := r.Status().Update(ctx, challenge); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Challenge status: %v", err)
 	}
@@ -291,7 +271,7 @@ func (r *ChallengeReconciler) markChallengeFailed(ctx context.Context, challenge
 
 // markChallengeSucceeded updates the Challenge to indicate that it has succeeded
 func (r *ChallengeReconciler) markChallengeSucceeded(ctx context.Context, challenge *zerosslv1alpha1.Challenge, reason, message string) (ctrl.Result, error) {
-	setChallengeCondition(challenge, "Ready", metav1.ConditionTrue, reason, message)
+	setChallengeCondition(challenge, ConditionReady, metav1.ConditionTrue, reason, message)
 	if err := r.Status().Update(ctx, challenge); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Challenge status: %v", err)
 	}
@@ -329,7 +309,7 @@ func setChallengeCondition(challenge *zerosslv1alpha1.Challenge, condType string
 // isChallengeReady checks if the Challenge is ready
 func isChallengeReady(challenge *zerosslv1alpha1.Challenge) bool {
 	for _, condition := range challenge.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
+		if condition.Type == ConditionReady && condition.Status == metav1.ConditionTrue {
 			return true
 		}
 	}

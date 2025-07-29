@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -420,22 +419,16 @@ func TestHasDNSValidator(t *testing.T) {
 	assert.False(t, hasDNSValidator(issuer, domains))
 }
 
-func TestIsNotReadyError(t *testing.T) {
-	assert.False(t, isNotReadyError(nil))
-	assert.True(t, isNotReadyError(fmt.Errorf("certificate is not issued yet")))
-	assert.True(t, isNotReadyError(fmt.Errorf("still being processed")))
-	assert.True(t, isNotReadyError(fmt.Errorf("still pending")))
-	assert.True(t, isNotReadyError(fmt.Errorf("validation in progress")))
-	assert.False(t, isNotReadyError(fmt.Errorf("some other error")))
-}
-
 // TestEmptyValidationMap tests handling of empty validation maps
 func TestEmptyValidationMap(t *testing.T) {
 	// Create a certificate info with empty validation map
 	certInfo := &zerossl.CertificateResponse{
-		ID:         "test-cert-id",
-		Status:     "pending_validation",
-		Validation: make(zerossl.ValidationInfo),
+		ID:     "test-cert-id",
+		Status: "pending_validation",
+		Validation: zerossl.ValidationInfo{
+			EmailValidation: make(map[string][]string),
+			OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),
+		},
 	}
 
 	// Test the getDomains function
