@@ -8,7 +8,7 @@ The project is in active development with core functionality implemented:
 - RBAC configuration
 - Container setup
 - Test framework
-- DNS solver with Route53 support
+- DNS solver with Route53 support for CNAME validation
 
 ## Recent Changes
 1. Initial project setup with Kubebuilder
@@ -18,6 +18,7 @@ The project is in active development with core functionality implemented:
 5. Setup of test infrastructure
 6. DNS solver implementation with Route53 support
 7. Enhanced domain matching for certificate requests
+8. CNAME-based DNS validation implementation
 
 ## Active Decisions
 
@@ -29,6 +30,8 @@ The project is in active development with core functionality implemented:
 5. Following cert-manager's DNS solver pattern
 6. Starting with Route53 as first DNS provider
 7. Domain-based solver selection strategy
+8. Using CNAME validation method for DNS challenges
+9. Using a dedicated Challenge resource to manage DNS validation
 
 ### Open Questions
 1. Rate limiting strategy for ZeroSSL API
@@ -70,6 +73,7 @@ The project is in active development with core functionality implemented:
 3. Test coverage
 4. Documentation
 5. DNS solver reliability
+6. CNAME validation functionality
 
 ### Testing
 1. Unit tests
@@ -92,6 +96,7 @@ The project is in active development with core functionality implemented:
 4. Metrics need expansion
 5. Limited to Route53 DNS provider
 6. DNS validation error handling needs improvement
+7. DNS propagation timing needs tuning
 
 ## Active Considerations
 

@@ -15,6 +15,7 @@
 ✅ Certificate creation
 ✅ Certificate retrieval
 ✅ DNS validation support
+✅ CNAME validation method
 
 ### Controller
 ✅ Basic controller structure
@@ -22,6 +23,7 @@
 ✅ Basic reconciliation loop
 ✅ Health checks
 ✅ DNS solver implementation
+✅ Challenge controller
 
 ### Testing
 ✅ Test framework setup
@@ -29,6 +31,7 @@
 ✅ E2E test structure
 ✅ CI workflow
 ✅ DNS solver unit tests
+✅ Mock AWS Route53 client
 
 ## In Progress
 
@@ -37,6 +40,7 @@
 🔄 Certificate renewal handling
 🔄 Error handling improvements
 🔄 Status updates
+🔄 DNS validation error handling
 
 ### Testing
 🔄 Expanding test coverage
@@ -86,7 +90,8 @@
 - Core components in place
 - Testing infrastructure ready
 - Documentation in progress
-- DNS solver support added
+- DNS solver support added with Route53
+- CNAME validation implemented
 
 ### Known Issues
 1. Rate limiting not implemented
@@ -94,6 +99,7 @@
 3. Documentation incomplete
 4. Error handling needs enhancement
 5. Limited to Route53 DNS provider
+6. DNS propagation timing needs tuning
 
 ### Next Milestones
 1. Complete core controller functionality
@@ -111,4 +117,4 @@ All core dependencies are available and working:
 - Kubernetes
 - ZeroSSL API
 - Development tools
-- AWS SDK for Route53 
+- AWS SDK for Go v2 

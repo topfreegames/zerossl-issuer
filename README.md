@@ -22,6 +22,7 @@ This project implements a [cert-manager](https://cert-manager.io) external issue
 2. Install the ZeroSSL issuer:
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/topfreegames/zerossl-issuer/main/config/crd/bases/zerossl.cert-manager.io_issuers.yaml
+   kubectl apply -f https://raw.githubusercontent.com/topfreegames/zerossl-issuer/main/config/crd/bases/zerossl.cert-manager.io_challenges.yaml
    kubectl apply -f https://raw.githubusercontent.com/topfreegames/zerossl-issuer/main/config/manager/manager.yaml
    ```
 
@@ -40,6 +41,8 @@ This project implements a [cert-manager](https://cert-manager.io) external issue
    ```
 
 2. Create a ZeroSSL Issuer:
+
+   ### Basic Issuer
    ```yaml
    apiVersion: zerossl.cert-manager.io/v1alpha1
    kind: Issuer
@@ -47,15 +50,57 @@ This project implements a [cert-manager](https://cert-manager.io) external issue
      name: zerossl-issuer
      namespace: default
    spec:
-     apiKey: your-api-key-here
+     apiKeySecretRef:
+       name: zerossl-api-key
+       key: api-key
      validityDays: 90  # Optional: defaults to 90
      strictDomains: true  # Optional: defaults to true
+   ```
+
+   ### Issuer with DNS Validation (Route53)
+   ```yaml
+   apiVersion: zerossl.cert-manager.io/v1alpha1
+   kind: Issuer
+   metadata:
+     name: zerossl-dns-issuer
+     namespace: default
+   spec:
+     apiKeySecretRef:
+       name: zerossl-api-key
+       key: api-key
+     validityDays: 90
+     strictDomains: true
+     solvers:
+     - dns01:
+         route53:
+           accessKeyID: AKIAEXAMPLE123456789
+           hostedZoneID: Z2E9THH2A4HU6P
+           region: us-east-1
+           secretAccessKeySecretRef:
+             key: secret
+             name: route53-credentials
+       selector:
+         dnsZones:
+         - example.com
+   ```
+
+3. Create AWS credentials secret for Route53 (if using DNS validation):
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: route53-credentials
+     namespace: default
+   type: Opaque
+   stringData:
+     secret: your-aws-secret-key-here
    ```
 
 ## Usage
 
 Once the issuer is configured, you can create certificates using cert-manager's Certificate resource:
 
+### Standard Certificate
 ```yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -71,6 +116,24 @@ spec:
   dnsNames:
     - example.com
     - www.example.com
+```
+
+### Wildcard Certificate with DNS Validation
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-example-com
+  namespace: default
+spec:
+  secretName: wildcard-example-com-tls
+  issuerRef:
+    name: zerossl-dns-issuer
+    kind: Issuer
+    group: zerossl.cert-manager.io
+  dnsNames:
+    - example.com
+    - "*.example.com"
 ```
 
 ## Development

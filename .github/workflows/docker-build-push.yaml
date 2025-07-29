@@ -19,8 +19,13 @@ jobs:
       uses: actions/checkout@v4
     - name: Get the current release version 
       id: vars
-      run: echo ::set-output name=tag::$(echo ${GITHUB_REF:10})
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=latest" >> $GITHUB_OUTPUT
+        fi
     - name: Login to DockerHub Registry
       run: echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-    - name: Build and Push the latest Docker image
+    - name: Build and Push the Docker image
       run: docker buildx build --push --platform linux/arm64,linux/amd64 -t tfgco/zerossl-issuer:latest -t tfgco/zerossl-issuer:${{steps.vars.outputs.tag}} .

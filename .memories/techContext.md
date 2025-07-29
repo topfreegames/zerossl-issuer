@@ -22,7 +22,7 @@
 - client-go
 - api-machinery
 - cert-manager API
-- AWS SDK (for Route53)
+- AWS SDK for Go v2
 
 ## Development Setup
 
@@ -65,6 +65,7 @@ make manifests
 - Domain validation methods (HTTP, DNS)
 - API key requirements
 - AWS credentials for Route53 access
+- CNAME validation record requirements
 
 ### Resource Requirements
 - Minimum memory: 64Mi
@@ -95,6 +96,7 @@ k8s.io/client-go
 k8s.io/api-machinery
 sigs.k8s.io/controller-runtime
 github.com/cert-manager/cert-manager
+github.com/aws/aws-sdk-go-v2
 ```
 
 ### Indirect Dependencies
@@ -108,7 +110,9 @@ github.com/cert-manager/cert-manager
 ### CRD Configuration
 - Group: zerossl.cert-manager.io
 - Version: v1alpha1
-- Kind: Issuer
+- Kinds: 
+  - Issuer
+  - Challenge
 - Scope: Namespaced
 - DNS Solver Types:
   - Route53 configuration
@@ -172,4 +176,12 @@ solvers:
 
 #### Domain Selector Options
 - dnsNames: Explicit domain list
-- dnsZones: Domain zones for wildcard matching 
+- dnsZones: Domain zones for wildcard matching
+
+### CNAME Validation Process
+1. Certificate request creates certificate in ZeroSSL API
+2. ZeroSSL provides CNAME validation details
+3. Controller creates Challenge resource with validation records
+4. Challenge controller creates CNAME records in Route53
+5. Controller verifies DNS validation via ZeroSSL API
+6. Certificate is issued after successful validation 

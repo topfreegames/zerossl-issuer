@@ -7,16 +7,20 @@
 ├── API (api/)
 │   └── v1alpha1/
 │       ├── Issuer CRD definition
+│       ├── Challenge CRD definition
 │       ├── Type definitions
 │       └── DNS solver types
 ├── Controller (internal/controller/)
 │   ├── Issuer reconciliation
 │   ├── Certificate management
+│   ├── Challenge controller
 │   └── DNS solver validation
 ├── ZeroSSL Client (internal/zerossl/)
 │   ├── API client
 │   ├── Certificate operations
 │   └── DNS validation methods
+├── AWS Integration (internal/aws/)
+│   └── Route53 client
 └── Configuration (config/)
     ├── CRDs
     ├── RBAC
@@ -30,6 +34,7 @@
 - Reconciliation loop for Issuer resources
 - Watch-based event handling
 - Status management and conditions
+- Challenge resource for DNS validation management
 
 ### Client-Server Pattern
 - RESTful API client for ZeroSSL
@@ -46,8 +51,9 @@
 ### DNS Solver Pattern
 - Domain-based solver selection
 - Route53 DNS provider implementation
-- DNS record validation flow
+- CNAME record validation flow
 - Cert-manager compatible pattern
+- Challenge resource for validation tracking
 
 ## Technical Decisions
 
@@ -56,12 +62,14 @@
 - Kubebuilder framework for scaffolding
 - Controller-runtime for controller implementation
 - Standard Go HTTP client for API calls
+- AWS SDK for Go v2 for Route53 integration
 
 ### Resource Management
 - Custom Resource Definitions (CRDs)
 - Namespace-scoped resources
 - Standard Kubernetes RBAC
 - Resource validation via webhooks (optional)
+- Challenge resource for DNS validation tracking
 
 ### Security Model
 - Non-root container execution
@@ -94,9 +102,10 @@
 4. Status updates
 5. DNS validation flow:
    - DNS solver selection based on domain
-   - TXT record creation requirements
+   - CNAME record requirements from ZeroSSL API
+   - Route53 record creation with proper formatting
    - DNS validation verification
-   - Certificate retrieval
+   - Certificate retrieval after validation
 
 ### Error Handling Strategy
 1. Transient vs. permanent errors
@@ -112,7 +121,7 @@
 2. Integration tests for controller
 3. E2E tests for full workflow
 4. Test fixtures and mocks
-5. DNS solver specific tests
+5. DNS solver specific tests with mock AWS clients
 
 ### Code Organization
 1. Clear package boundaries
