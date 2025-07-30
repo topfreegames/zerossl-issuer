@@ -1,0 +1,61 @@
+Thank you for installing {{ .Chart.Name }} v{{ .Chart.Version }}!
+
+The ZeroSSL cert-manager Issuer has been deployed to your cluster in the {{ include "zerossl-issuer.namespace" . }} namespace.
+
+To verify that the ZeroSSL Issuer is working properly:
+
+1. Check if the controller deployment is running:
+   kubectl get deployments -n {{ include "zerossl-issuer.namespace" . }} {{ include "zerossl-issuer.fullname" . }}-controller
+
+2. To use the ZeroSSL Issuer, you need to create an Issuer or ClusterIssuer resource with your ZeroSSL API key:
+
+   First, create a Secret with your ZeroSSL API key:
+   
+   ```
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: zerossl-api-key
+     namespace: your-namespace
+   type: Opaque
+   stringData:
+     api-key: your-api-key-here
+   ```
+
+   Then, create a ZeroSSL Issuer:
+   
+   ```
+   apiVersion: zerossl.cert-manager.io/v1alpha1
+   kind: Issuer
+   metadata:
+     name: zerossl-issuer
+     namespace: your-namespace
+   spec:
+     apiKeySecretRef:
+       name: zerossl-api-key
+       key: api-key
+     validityDays: 90
+     strictDomains: false
+   ```
+
+3. After creating the Issuer, you can request certificates using cert-manager Certificate resources:
+   
+   ```
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: example-com
+     namespace: your-namespace
+   spec:
+     secretName: example-com-tls
+     issuerRef:
+       name: zerossl-issuer
+       kind: Issuer
+       group: zerossl.cert-manager.io
+     dnsNames:
+       - example.com
+       - www.example.com
+   ```
+
+For more information, check the documentation at:
+https://github.com/topfreegames/zerossl-issuer 

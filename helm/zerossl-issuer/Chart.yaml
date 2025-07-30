@@ -1,0 +1,17 @@
+apiVersion: v2
+name: zerossl-issuer
+description: A Helm chart for the ZeroSSL cert-manager Issuer
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - zerossl
+  - cert-manager
+  - certificates
+  - tls
+  - kubernetes
+home: https://github.com/topfreegames/zerossl-issuer
+maintainers:
+  - name: topfreegames
+sources:
+  - https://github.com/topfreegames/zerossl-issuer 

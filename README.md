@@ -14,6 +14,27 @@ This project implements a [cert-manager](https://cert-manager.io) external issue
 
 ## Installation
 
+### Using Helm (Recommended)
+
+1. Install cert-manager (if not already installed):
+   ```bash
+   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+   ```
+
+2. Install the ZeroSSL issuer using Helm:
+   ```bash
+   # Clone the repository (if you don't have the chart locally)
+   git clone https://github.com/topfreegames/zerossl-issuer.git
+   cd zerossl-issuer
+   
+   # Install the chart
+   helm install zerossl-issuer ./helm/zerossl-issuer
+   ```
+
+   See the [Helm chart README](./helm/zerossl-issuer/README.md) for detailed configuration options.
+
+### Manual Installation
+
 1. Install cert-manager (if not already installed):
    ```bash
    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml

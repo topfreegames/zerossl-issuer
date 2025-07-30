@@ -1,0 +1,144 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "zerossl-issuer.fullname" . }}-manager-role
+  labels:
+    {{- include "zerossl-issuer.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificaterequests
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificaterequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificaterequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - zerossl.cert-manager.io
+  resources:
+  - challenges
+  - clusterissuers
+  - issuers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - zerossl.cert-manager.io
+  resources:
+  - challenges/finalizers
+  - clusterissuers/finalizers
+  - issuers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - zerossl.cert-manager.io
+  resources:
+  - challenges/status
+  - clusterissuers/status
+  - issuers/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "zerossl-issuer.fullname" . }}-manager-rolebinding
+  labels:
+    {{- include "zerossl-issuer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "zerossl-issuer.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "zerossl-issuer.serviceAccountName" . }}
+  namespace: {{ include "zerossl-issuer.namespace" . }}
+{{- if .Values.leaderElection.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "zerossl-issuer.fullname" . }}-leader-election-role
+  namespace: {{ include "zerossl-issuer.namespace" . }}
+  labels:
+    {{- include "zerossl-issuer.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "zerossl-issuer.fullname" . }}-leader-election-rolebinding
+  namespace: {{ include "zerossl-issuer.namespace" . }}
+  labels:
+    {{- include "zerossl-issuer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "zerossl-issuer.fullname" . }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "zerossl-issuer.serviceAccountName" . }}
+  namespace: {{ include "zerossl-issuer.namespace" . }}
+{{- end }} 
