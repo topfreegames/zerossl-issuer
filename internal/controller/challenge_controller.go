@@ -188,8 +188,7 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 	err = zerosslClient.VerifyDNSValidation(challenge.Spec.CertificateID)
 	if err != nil {
 		logger.Info("DNS validation error", "error", err.Error())
-		// Continue with processing instead of checking if it's a "not ready" error
-		return r.markChallengeProcessing(ctx, challenge, "Validating", "DNS validation in progress")
+		return r.markChallengeFailed(ctx, challenge, "DNSValidationFailed", fmt.Sprintf("Failed to verify DNS validation: %v", err))
 	}
 
 	// Check certificate status

@@ -12,6 +12,9 @@ const (
 	// BaseURL is the base URL for the ZeroSSL API
 	BaseURL = "https://api.zerossl.com"
 
+	// Validation error codes
+	ErrorDomainControlValidationFailed = 0
+
 	// General error codes
 	ErrorInvalidAccessKey        = 101
 	ErrorInactiveUser            = 102
@@ -309,6 +312,11 @@ func handleResponse(resp *http.Response) error {
 	// Check if we have a valid error response
 	if !errorResp.Success && errorResp.Error.Code > 0 {
 		return &errorResp.Error
+	}
+
+	// It's not an error, just means the validation is still in progress
+	if errorResp.Error.Code == ErrorDomainControlValidationFailed {
+		return nil
 	}
 
 	// If we couldn't parse the error properly, return a generic error

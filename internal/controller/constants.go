@@ -22,4 +22,10 @@ const (
 
 	// CertificateRequestIDAnnotation is used to store the ZeroSSL certificate ID
 	CertificateRequestIDAnnotation = "zerossl.cert-manager.io/certificate-id"
+
+	// IssuerKind is the default kind for issuers
+	IssuerKind = "Issuer"
+
+	// CertManagerNamespace is the namespace where cert-manager resources are located
+	CertManagerNamespace = "cert-manager"
 )

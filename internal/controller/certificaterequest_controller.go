@@ -121,7 +121,7 @@ func (r *CertificateRequestReconciler) isZeroSSLIssuer(cr *cmapi.CertificateRequ
 }
 
 // processCertificateRequest handles the main certificate request processing logic
-func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Context, req ctrl.Request, cr *cmapi.CertificateRequest) (ctrl.Result, error) {
+func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Context, _ ctrl.Request, cr *cmapi.CertificateRequest) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Get the referenced issuer
@@ -133,7 +133,7 @@ func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Con
 	// Log the type of issuer being used
 	kind := cr.Spec.IssuerRef.Kind
 	if kind == "" {
-		kind = "Issuer"
+		kind = IssuerKind
 	}
 	logger.Info("Using issuer for certificate",
 		"issuerKind", kind,
@@ -188,7 +188,7 @@ func (r *CertificateRequestReconciler) getIssuerForCR(ctx context.Context, cr *c
 
 	// Default to Issuer if not specified
 	if kind == "" {
-		kind = "Issuer"
+		kind = IssuerKind
 	}
 
 	// Check if the reference is to a ClusterIssuer
@@ -238,6 +238,8 @@ func (r *CertificateRequestReconciler) getIssuerForCR(ctx context.Context, cr *c
 }
 
 // getIssuer is kept for backward compatibility
+// getIssuer is kept for backward compatibility but is currently unused
+// nolint:unused
 func (r *CertificateRequestReconciler) getIssuer(ctx context.Context, namespace, name string) (*zerosslv1alpha1.Issuer, error) {
 	issuer := &zerosslv1alpha1.Issuer{}
 	issuerName := types.NamespacedName{
@@ -259,7 +261,7 @@ func (r *CertificateRequestReconciler) getZeroSSLClient(ctx context.Context, iss
 	secretNamespace := issuer.Namespace
 	if secretNamespace == "" {
 		// This is from a ClusterIssuer, use cert-manager namespace
-		secretNamespace = "cert-manager"
+		secretNamespace = CertManagerNamespace
 	}
 
 	// Get the API key from the secret
