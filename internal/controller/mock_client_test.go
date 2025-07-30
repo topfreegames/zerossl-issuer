@@ -35,6 +35,13 @@ type MockZeroSSLClient struct {
 
 	GetCertificateResp *zerossl.CertificateResponse
 	GetCertificateErr  error
+
+	ValidateAPIKeyErr error
+}
+
+// ValidateAPIKey mocks the ValidateAPIKey method
+func (m *MockZeroSSLClient) ValidateAPIKey() error {
+	return m.ValidateAPIKeyErr
 }
 
 // CreateCertificate mocks the CreateCertificate method

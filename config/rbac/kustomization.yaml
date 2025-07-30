@@ -25,4 +25,7 @@ resources:
 - issuer_admin_role.yaml
 - issuer_editor_role.yaml
 - issuer_viewer_role.yaml
+- clusterissuer_admin_role.yaml
+- clusterissuer_editor_role.yaml
+- clusterissuer_viewer_role.yaml
 

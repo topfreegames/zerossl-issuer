@@ -14,18 +14,52 @@ const (
 	BaseURL = "https://api.zerossl.com"
 )
 
-// Client represents a ZeroSSL API client
-type Client struct {
-	apiKey     string
-	httpClient *http.Client
+// ZeroSSLClientInterface defines the interface for a ZeroSSL client
+type ZeroSSLClientInterface interface {
+	ValidateAPIKey() error
+	CreateCertificate(req *CertificateRequest) (*CertificateResponse, error)
+	GetCertificate(id string) (*CertificateResponse, error)
+	DownloadCertificate(id string) (*DownloadCertificateResponse, error)
+	InitiateValidation(id string, method ValidationMethod) (*CertificateResponse, error)
+	VerifyDNSValidation(id string) error
 }
 
-// NewClient creates a new ZeroSSL API client
-func NewClient(apiKey string) *Client {
+// ClientFactoryFunc is a factory function for creating ZeroSSL clients
+type ClientFactoryFunc func(apiKey string) ZeroSSLClientInterface
+
+// defaultClientFactory is the default factory function for creating ZeroSSL clients
+var defaultClientFactory ClientFactoryFunc = func(apiKey string) ZeroSSLClientInterface {
 	return &Client{
 		apiKey:     apiKey,
 		httpClient: &http.Client{},
 	}
+}
+
+// currentClientFactory is the current factory function for creating ZeroSSL clients
+var currentClientFactory ClientFactoryFunc = defaultClientFactory
+
+// NewClient creates a new ZeroSSL API client
+func NewClient(apiKey string) ZeroSSLClientInterface {
+	return currentClientFactory(apiKey)
+}
+
+// SetClientFactory sets the factory function for creating ZeroSSL clients
+// Returns the previous factory function
+func SetClientFactory(factory ClientFactoryFunc) ClientFactoryFunc {
+	previous := currentClientFactory
+	currentClientFactory = factory
+	return previous
+}
+
+// ResetClientFactory resets the client factory to the default
+func ResetClientFactory() {
+	currentClientFactory = defaultClientFactory
+}
+
+// Client represents a ZeroSSL API client
+type Client struct {
+	apiKey     string
+	httpClient *http.Client
 }
 
 // ValidateAPIKey validates the API key by making a test request
