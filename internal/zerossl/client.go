@@ -11,6 +11,55 @@ import (
 const (
 	// BaseURL is the base URL for the ZeroSSL API
 	BaseURL = "https://api.zerossl.com"
+
+	// General error codes
+	ErrorInvalidAccessKey        = 101
+	ErrorInactiveUser            = 102
+	ErrorInvalidAPIFunction      = 103
+	ErrorRouteNotFound           = 104
+	ErrorInvalidRequestBody      = 110
+	ErrorInternalServerError     = 111
+	ErrorConflict                = 112
+	ErrorUnprocessableEntity     = 113
+	ErrorInvalidJSONRequest      = 115
+	ErrorInvalidJSONRequestParam = 116
+	ErrorIncorrectRequestType    = 2800
+	ErrorPermissionDenied        = 2801
+	ErrorMissingCertificateHash  = 2802
+	ErrorCertificateNotFound     = 2803
+
+	// Certificate creation error codes
+	ErrorCannotIssueCertificateUnpaidInvoices          = 2804
+	ErrorInvalidCertificateType                        = 2805
+	ErrorMissingCertificateType                        = 2806
+	ErrorInvalidCertificateValidity                    = 2807
+	ErrorInvalidCertificateDomain                      = 2808
+	ErrorWildcardDomainsNotAllowedInMultiDomain        = 2809
+	ErrorInvalidDomainsInMultiDomainRequest            = 2810
+	ErrorDuplicateDomainsInArray                       = 2811
+	ErrorMissingCertificateDomains                     = 2812
+	ErrorCannotReplaceCertificateOtherReplacementDraft = 2813
+	ErrorPermissionDeniedOnOriginalCertificate         = 2814
+	ErrorOriginalCertificateNotActive                  = 2815
+	ErrorCannotFindOriginalCertificate                 = 2816
+	ErrorCertificateLimitReached                       = 2817
+	ErrorInvalidCertificateCSR                         = 2818
+	ErrorMissingCertificateCSR                         = 2819
+	ErrorInternalErrorFailedProcessingCSR              = 2820
+	ErrorInternalErrorFailedCreatingCertificate        = 2821
+	ErrorFailedValidatingCertificate                   = 2823
+
+	// Certificate download error codes
+	ErrorCertificateNotIssued       = 2832
+	ErrorCertificateNotDownloadable = 2860
+
+	// Certificate cancellation error codes
+	ErrorCertificateCannotBeCancelled = 2833
+	ErrorFailedCancellingCertificate  = 2834
+
+	// Verification error codes
+	ErrorFailedResendingEmail          = 2837
+	ErrorFailedGettingValidationStatus = 2838
 )
 
 // ZeroSSLClientInterface defines the interface for a ZeroSSL client
@@ -178,12 +227,62 @@ func (c *Client) VerifyDNSValidation(id string) error {
 
 // Error represents a ZeroSSL API error response
 type Error struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code int         `json:"code"`
+	Type string      `json:"type"`
+	Info interface{} `json:"info,omitempty"`
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("ZeroSSL API error %d: %s", e.Code, e.Message)
+	if e.Info != nil {
+		return fmt.Sprintf("ZeroSSL API error %d: %s (info: %v)", e.Code, e.Type, e.Info)
+	}
+	return fmt.Sprintf("ZeroSSL API error %d: %s", e.Code, e.Type)
+}
+
+// IsAuthError returns true if the error is an authentication error
+func (e *Error) IsAuthError() bool {
+	return e.Code == ErrorInvalidAccessKey || e.Code == ErrorInactiveUser || e.Code == ErrorPermissionDenied
+}
+
+// IsCertificateNotFoundError returns true if the error indicates the certificate was not found
+func (e *Error) IsCertificateNotFoundError() bool {
+	return e.Code == ErrorCertificateNotFound
+}
+
+// IsCertificateNotIssuedError returns true if the error indicates the certificate is not issued yet
+func (e *Error) IsCertificateNotIssuedError() bool {
+	return e.Code == ErrorCertificateNotIssued
+}
+
+// IsCertificateNotDownloadableError returns true if the error indicates the certificate cannot be downloaded
+func (e *Error) IsCertificateNotDownloadableError() bool {
+	return e.Code == ErrorCertificateNotDownloadable
+}
+
+// IsCertificateLimitReachedError returns true if the error indicates the certificate limit was reached
+func (e *Error) IsCertificateLimitReachedError() bool {
+	return e.Code == ErrorCertificateLimitReached
+}
+
+// IsValidationError returns true if the error is related to validation
+func (e *Error) IsValidationError() bool {
+	return e.Code == ErrorFailedValidatingCertificate || e.Code == ErrorFailedGettingValidationStatus
+}
+
+// AsError attempts to convert a generic error to a ZeroSSL Error
+func AsError(err error) (*Error, bool) {
+	if err == nil {
+		return nil, false
+	}
+
+	zeroCertErr, ok := err.(*Error)
+	return zeroCertErr, ok
+}
+
+// ZeroSSLErrorResponse represents the error response format from ZeroSSL API
+type ZeroSSLErrorResponse struct {
+	Success bool  `json:"success"`
+	Error   Error `json:"error"`
 }
 
 // handleResponse handles the API response and returns an error if the response is not successful
@@ -192,10 +291,26 @@ func handleResponse(resp *http.Response) error {
 		return nil
 	}
 
-	var apiError Error
-	if err := json.NewDecoder(resp.Body).Decode(&apiError); err != nil {
-		return fmt.Errorf("failed to decode error response: %v", err)
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read error response body: %v", err)
 	}
 
-	return &apiError
+	// Reset the response body for further reading
+	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+
+	// Try to parse as ZeroSSL error format
+	var errorResp ZeroSSLErrorResponse
+	if err := json.Unmarshal(body, &errorResp); err != nil {
+		return fmt.Errorf("failed to decode error response: %v (status code: %d, body: %s)", err, resp.StatusCode, string(body))
+	}
+
+	// Check if we have a valid error response
+	if !errorResp.Success && errorResp.Error.Code > 0 {
+		return &errorResp.Error
+	}
+
+	// If we couldn't parse the error properly, return a generic error
+	return fmt.Errorf("unexpected API response: status code %d, body: %s", resp.StatusCode, string(body))
 }
