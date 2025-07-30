@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -118,16 +117,21 @@ func (c *Client) InitiateValidation(id string, method ValidationMethod) (*Certif
 	endpoint := fmt.Sprintf("%s/certificates/%s/challenges?access_key=%s", BaseURL, id, c.apiKey)
 
 	// Build form data for POST request
-	formData := url.Values{}
-	formData.Add("validation_method", string(method))
+	data := map[string]interface{}{
+		"validation_method": string(method),
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request data: %v", err)
+	}
 
 	// Create request
-	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(formData.Encode()))
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validation request: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
 	resp, err := c.httpClient.Do(req)

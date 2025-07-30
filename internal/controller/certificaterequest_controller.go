@@ -77,6 +77,7 @@ func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Sc
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests/finalizers,verbs=update
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=clusterissuers,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -121,11 +122,23 @@ func (r *CertificateRequestReconciler) isZeroSSLIssuer(cr *cmapi.CertificateRequ
 
 // processCertificateRequest handles the main certificate request processing logic
 func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Context, req ctrl.Request, cr *cmapi.CertificateRequest) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
 	// Get the referenced issuer
-	issuer, err := r.getIssuer(ctx, req.Namespace, cr.Spec.IssuerRef.Name)
+	issuer, err := r.getIssuerForCR(ctx, cr)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Log the type of issuer being used
+	kind := cr.Spec.IssuerRef.Kind
+	if kind == "" {
+		kind = "Issuer"
+	}
+	logger.Info("Using issuer for certificate",
+		"issuerKind", kind,
+		"issuerName", cr.Spec.IssuerRef.Name,
+		"namespace", issuer.Namespace)
 
 	// Check if the issuer is ready
 	if !isIssuerReady(issuer) {
@@ -167,7 +180,64 @@ func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Con
 	return r.handleExistingCertificate(ctx, cr, issuer, zerosslClient, domains, certID)
 }
 
-// getIssuer retrieves the issuer referenced by the certificate request
+// getIssuerForCR retrieves the issuer referenced by the certificate request
+// It supports both Issuer and ClusterIssuer kinds
+func (r *CertificateRequestReconciler) getIssuerForCR(ctx context.Context, cr *cmapi.CertificateRequest) (*zerosslv1alpha1.Issuer, error) {
+	kind := cr.Spec.IssuerRef.Kind
+	name := cr.Spec.IssuerRef.Name
+
+	// Default to Issuer if not specified
+	if kind == "" {
+		kind = "Issuer"
+	}
+
+	// Check if the reference is to a ClusterIssuer
+	if strings.EqualFold(kind, "ClusterIssuer") {
+		clusterIssuer := &zerosslv1alpha1.ClusterIssuer{}
+		clusterIssuerName := types.NamespacedName{
+			Name: name,
+			// ClusterIssuers are not namespaced
+		}
+
+		if err := r.Get(ctx, clusterIssuerName, clusterIssuer); err != nil {
+			return nil, fmt.Errorf("failed to get ClusterIssuer: %v", err)
+		}
+
+		// Convert ClusterIssuer spec to Issuer for compatibility
+		issuer := &zerosslv1alpha1.Issuer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterIssuer.Name,
+				// Intentionally leave namespace empty to indicate this is from a ClusterIssuer
+			},
+			Spec: zerosslv1alpha1.IssuerSpec{
+				APIKeySecretRef: clusterIssuer.Spec.APIKeySecretRef,
+				ValidityDays:    clusterIssuer.Spec.ValidityDays,
+				StrictDomains:   clusterIssuer.Spec.StrictDomains,
+				Solvers:         clusterIssuer.Spec.Solvers,
+			},
+			Status: zerosslv1alpha1.IssuerStatus{
+				Conditions: clusterIssuer.Status.Conditions,
+			},
+		}
+
+		return issuer, nil
+	}
+
+	// Handle Issuer type
+	issuer := &zerosslv1alpha1.Issuer{}
+	issuerName := types.NamespacedName{
+		Name:      name,
+		Namespace: cr.Namespace,
+	}
+
+	if err := r.Get(ctx, issuerName, issuer); err != nil {
+		return nil, fmt.Errorf("failed to get issuer: %v", err)
+	}
+
+	return issuer, nil
+}
+
+// getIssuer is kept for backward compatibility
 func (r *CertificateRequestReconciler) getIssuer(ctx context.Context, namespace, name string) (*zerosslv1alpha1.Issuer, error) {
 	issuer := &zerosslv1alpha1.Issuer{}
 	issuerName := types.NamespacedName{
@@ -184,11 +254,19 @@ func (r *CertificateRequestReconciler) getIssuer(ctx context.Context, namespace,
 
 // getZeroSSLClient creates a ZeroSSL client from the issuer configuration
 func (r *CertificateRequestReconciler) getZeroSSLClient(ctx context.Context, issuer *zerosslv1alpha1.Issuer) (ZeroSSLClient, error) {
+	// Determine if this was originally a ClusterIssuer by checking if the issuer doesn't have a namespace
+	// ClusterIssuers have secrets in the cert-manager namespace
+	secretNamespace := issuer.Namespace
+	if secretNamespace == "" {
+		// This is from a ClusterIssuer, use cert-manager namespace
+		secretNamespace = "cert-manager"
+	}
+
 	// Get the API key from the secret
 	secret := &corev1.Secret{}
 	secretName := types.NamespacedName{
 		Name:      issuer.Spec.APIKeySecretRef.Name,
-		Namespace: issuer.Namespace,
+		Namespace: secretNamespace,
 	}
 
 	if err := r.Get(ctx, secretName, secret); err != nil {

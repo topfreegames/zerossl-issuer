@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -66,6 +67,8 @@ func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme) *Ch
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=challenges/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=challenges/finalizers,verbs=update
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=clusterissuers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *ChallengeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -248,6 +251,44 @@ func (r *ChallengeReconciler) getIssuerForChallenge(ctx context.Context, challen
 		return nil, fmt.Errorf("failed to get CertificateRequest: %v", err)
 	}
 
+	// Get the issuer reference kind (default to "Issuer" if not specified)
+	kind := cr.Spec.IssuerRef.Kind
+	if kind == "" {
+		kind = "Issuer"
+	}
+
+	// Check if the reference is to a ClusterIssuer
+	if strings.EqualFold(kind, "ClusterIssuer") {
+		clusterIssuer := &zerosslv1alpha1.ClusterIssuer{}
+		clusterIssuerName := types.NamespacedName{
+			Name: cr.Spec.IssuerRef.Name,
+			// ClusterIssuers are not namespaced
+		}
+
+		if err := r.Get(ctx, clusterIssuerName, clusterIssuer); err != nil {
+			return nil, fmt.Errorf("failed to get ClusterIssuer: %v", err)
+		}
+
+		// Convert ClusterIssuer spec to Issuer for compatibility
+		issuer := &zerosslv1alpha1.Issuer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterIssuer.Name,
+				// Intentionally leave namespace empty to indicate this is from a ClusterIssuer
+			},
+			Spec: zerosslv1alpha1.IssuerSpec{
+				APIKeySecretRef: clusterIssuer.Spec.APIKeySecretRef,
+				ValidityDays:    clusterIssuer.Spec.ValidityDays,
+				StrictDomains:   clusterIssuer.Spec.StrictDomains,
+				Solvers:         clusterIssuer.Spec.Solvers,
+			},
+			Status: zerosslv1alpha1.IssuerStatus{
+				Conditions: clusterIssuer.Status.Conditions,
+			},
+		}
+
+		return issuer, nil
+	}
+
 	// Now get the issuer
 	issuer := &zerosslv1alpha1.Issuer{}
 	issuerName := types.NamespacedName{
@@ -264,11 +305,19 @@ func (r *ChallengeReconciler) getIssuerForChallenge(ctx context.Context, challen
 
 // getZeroSSLClient creates a ZeroSSL client from the issuer configuration
 func (r *ChallengeReconciler) getZeroSSLClient(ctx context.Context, issuer *zerosslv1alpha1.Issuer) (ZeroSSLClient, error) {
+	// Determine if this was originally a ClusterIssuer by checking if the issuer doesn't have a namespace
+	// ClusterIssuers have secrets in the cert-manager namespace
+	secretNamespace := issuer.Namespace
+	if secretNamespace == "" {
+		// This is from a ClusterIssuer, use cert-manager namespace
+		secretNamespace = "cert-manager"
+	}
+
 	// Get the API key from the secret
 	secret := &corev1.Secret{}
 	secretName := types.NamespacedName{
 		Name:      issuer.Spec.APIKeySecretRef.Name,
-		Namespace: issuer.Namespace,
+		Namespace: secretNamespace,
 	}
 
 	if err := r.Get(ctx, secretName, secret); err != nil {

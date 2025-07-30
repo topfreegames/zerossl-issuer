@@ -12,7 +12,7 @@ spec:
     listKind: ClusterIssuerList
     plural: clusterissuers
     singular: clusterissuer
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:

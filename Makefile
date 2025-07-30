@@ -146,6 +146,14 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
 
+.PHONY: sync-crds
+sync-crds: manifests ## Sync CRDs from config/crd/bases to helm/zerossl-issuer/crds
+	@echo "Syncing CRDs to Helm chart..."
+	cp config/crd/bases/zerossl.cert-manager.io_issuers.yaml helm/zerossl-issuer/crds/
+	cp config/crd/bases/zerossl.cert-manager.io_clusterissuers.yaml helm/zerossl-issuer/crds/
+	cp config/crd/bases/zerossl.cert-manager.io_challenges.yaml helm/zerossl-issuer/crds/
+	@echo "CRDs synced successfully."
+
 ##@ Deployment
 
 ifndef ignore-not-found

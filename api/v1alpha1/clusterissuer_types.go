@@ -35,9 +35,10 @@ type ClusterIssuerStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:scope=Cluster
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+kubebuilder:scope=Cluster
+//+kubebuilder:resource:scope=Cluster
 
 // ClusterIssuer is the Schema for the cluster-wide issuers API
 type ClusterIssuer struct {
@@ -56,7 +57,8 @@ type ClusterIssuer struct {
 	Status ClusterIssuerStatus `json:"status,omitempty,omitzero"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
+//+kubebuilder:resource:scope=Cluster
 
 // ClusterIssuerList contains a list of ClusterIssuer
 type ClusterIssuerList struct {
