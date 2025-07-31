@@ -9,7 +9,7 @@ namespace:
 
 # Image settings
 image:
-  repository: topfreegames/zerossl-issuer
+  repository: tfgco/zerossl-issuer
   tag: latest
   pullPolicy: IfNotPresent
 
