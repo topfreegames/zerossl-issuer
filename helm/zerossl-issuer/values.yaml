@@ -96,4 +96,36 @@ leaderElection:
   enabled: true
 
 # Install CRDs (cert-manager custom resources)
-installCRDs: true 
+installCRDs: true
+
+# Metrics configuration
+metrics:
+  # Enable the metrics endpoint
+  enabled: true
+  # The port to expose metrics on
+  port: 8443
+  # Whether to use HTTPS for the metrics endpoint
+  secure: true
+  # Service configuration for metrics
+  service:
+    # Type of service to create for metrics
+    type: ClusterIP
+    # Annotations to add to the metrics service
+    annotations: {}
+  # ServiceMonitor configuration for Prometheus Operator
+  serviceMonitor:
+    # Whether to create a ServiceMonitor resource for Prometheus Operator
+    enabled: false
+    # Additional labels for the ServiceMonitor resource
+    additionalLabels: {}
+    # Namespace where the ServiceMonitor resource should be created
+    # If not set, the same namespace as the chart is used
+    namespace: ""
+    # Interval at which metrics should be scraped
+    interval: 30s
+    # Timeout for the scrape request
+    scrapeTimeout: 10s
+    # TLS configuration for scraping
+    tlsConfig:
+      # Skip TLS verification
+      insecureSkipVerify: true 

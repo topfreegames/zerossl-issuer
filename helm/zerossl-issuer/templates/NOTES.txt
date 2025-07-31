@@ -57,5 +57,26 @@ To verify that the ZeroSSL Issuer is working properly:
        - www.example.com
    ```
 
+{{- if .Values.metrics.enabled }}
+
+4. Metrics are enabled and available at:
+
+   {{- if eq .Values.metrics.service.type "ClusterIP" }}
+   # Access metrics from within the cluster
+   kubectl port-forward -n {{ include "zerossl-issuer.namespace" . }} svc/{{ include "zerossl-issuer.fullname" . }}-metrics {{ .Values.metrics.port }}:{{ .Values.metrics.port }}
+   
+   # Then access via:
+   {{- if .Values.metrics.secure }}
+   curl -k https://localhost:{{ .Values.metrics.port }}/metrics
+   {{- else }}
+   curl http://localhost:{{ .Values.metrics.port }}/metrics
+   {{- end }}
+   {{- end }}
+
+   {{- if .Values.metrics.serviceMonitor.enabled }}
+   # Metrics are also available via Prometheus using the ServiceMonitor
+   {{- end }}
+{{- end }}
+
 For more information, check the documentation at:
 https://github.com/topfreegames/zerossl-issuer 
