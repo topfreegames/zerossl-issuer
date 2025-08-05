@@ -134,4 +134,6 @@
 1. Kubernetes manifests
 2. Kustomize for configuration
 3. Multi-arch container images
-4. Resource limits and requests 
+4. Resource limits and requests
+5. Helm chart with JSON schema validation
+6. Comprehensive values validation 

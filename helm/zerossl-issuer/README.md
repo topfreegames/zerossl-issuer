@@ -31,6 +31,26 @@ By default, the chart will be installed in the cert-manager namespace, which is 
 
 The following table lists the configurable parameters of the ZeroSSL Issuer chart and their default values.
 
+### Values Validation
+
+This chart includes a JSON schema (`values.schema.json`) that validates the values provided during installation. The schema ensures that:
+
+- Required fields are present
+- Values have the correct data types
+- Enum values are within allowed ranges
+- Resource specifications follow proper formats
+
+If you provide invalid values, Helm will show validation errors before deployment. For example:
+
+```bash
+# This will fail validation
+helm install zerossl-issuer . --set image.pullPolicy=InvalidPolicy
+
+Error: values don't meet the specifications of the schema(s) in the following chart(s):
+zerossl-issuer:
+- image.pullPolicy: image.pullPolicy must be one of the following: "Always", "Never", "IfNotPresent"
+```
+
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
 | `namespace.name` | Namespace where the controller will be deployed | `cert-manager` |

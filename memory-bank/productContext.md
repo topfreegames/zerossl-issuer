@@ -20,6 +20,8 @@ ZeroSSL Issuer bridges the gap between cert-manager and ZeroSSL by providing:
 4. Easy troubleshooting through logs and metrics
 5. Seamless integration with existing cert-manager workflows
 6. Easy DNS validation configuration
+7. Robust configuration validation preventing deployment errors
+8. Clear error messages for invalid Helm values
 
 ### For Application Teams
 1. Automatic certificate provisioning for their services
@@ -82,6 +84,13 @@ ZeroSSL Issuer bridges the gap between cert-manager and ZeroSSL by providing:
 - Standard RBAC model
 - Prometheus metrics
 - Health monitoring
+
+### Helm Chart Integration
+- JSON Schema validation for configuration
+- Pre-deployment error detection
+- Type safety and constraint validation
+- Enhanced documentation with schema descriptions
+- Improved user experience during installation
 
 ### DNS Provider Integration
 - Route53 integration for DNS validation

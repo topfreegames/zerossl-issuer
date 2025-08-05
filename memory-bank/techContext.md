@@ -156,6 +156,14 @@ resources:
 - Services
 - Network Policies
 
+### Helm Chart Features
+- JSON Schema validation (Draft 2020-12)
+- Comprehensive values validation
+- Type checking and constraint validation
+- Required field enforcement
+- Configuration error prevention
+- Enhanced user experience with clear error messages
+
 ### DNS Solver Configuration
 
 #### Route53 Solver Example

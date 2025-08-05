@@ -57,6 +57,11 @@
 🔄 Troubleshooting guide
 ✅ DNS solver documentation
 
+### Deployment & Packaging
+✅ Helm chart with JSON schema validation
+✅ Values validation and error handling
+✅ Comprehensive configuration documentation
+
 ## To Do
 
 ### Features
@@ -65,6 +70,11 @@
 ❌ Rate limiting
 ❌ Advanced certificate management
 ❌ Additional DNS providers
+
+### Automation & DevOps
+❌ Automated schema generation in CI/CD
+❌ Pre-commit hooks for schema validation
+❌ Automated testing of Helm chart
 
 ### Monitoring
 ❌ Enhanced metrics

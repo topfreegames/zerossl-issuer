@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/topfreegames/zerossl-issuer/values.schema.json",
+  "title": "ZeroSSL Issuer Helm Values Schema",
+  "description": "Schema for ZeroSSL cert-manager Issuer Helm chart values",
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "object",
+      "description": "Namespace configuration for the ZeroSSL issuer deployment",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the namespace to deploy to",
+          "minLength": 1,
+          "default": "cert-manager"
+        },
+        "create": {
+          "type": "boolean",
+          "description": "Whether to create the namespace if it doesn't exist",
+          "default": false
+        }
+      },
+      "required": ["name", "create"],
+      "additionalProperties": false
+    },
+    "image": {
+      "type": "object",
+      "description": "Container image settings for the ZeroSSL issuer controller",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Container image repository",
+          "minLength": 1,
+          "pattern": "^[a-z0-9.-]+(/[a-z0-9._-]+)*$",
+          "default": "tfgco/zerossl-issuer"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Container image tag",
+          "minLength": 1,
+          "default": "latest"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "description": "Image pull policy",
+          "enum": ["Always", "Never", "IfNotPresent"],
+          "default": "IfNotPresent"
+        }
+      },
+      "required": ["repository", "tag", "pullPolicy"],
+      "additionalProperties": false
+    },
+    "resources": {
+      "type": "object",
+      "description": "Resource constraints for the controller pod",
+      "properties": {
+        "limits": {
+          "type": "object",
+          "description": "Resource limits",
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "description": "CPU limit",
+              "pattern": "^[0-9]+m?$"
+            },
+            "memory": {
+              "type": "string",
+              "description": "Memory limit",
+              "pattern": "^[0-9]+(Mi|Gi|Ki)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "requests": {
+          "type": "object",
+          "description": "Resource requests",
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "description": "CPU request",
+              "pattern": "^[0-9]+m?$"
+            },
+            "memory": {
+              "type": "string",
+              "description": "Memory request",
+              "pattern": "^[0-9]+(Mi|Gi|Ki)$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "replicaCount": {
+      "type": "integer",
+      "description": "Number of controller pod replicas",
+      "minimum": 1,
+      "default": 1
+    },
+    "commonLabels": {
+      "type": "object",
+      "description": "Common labels to add to all resources",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "description": "Pod security context settings",
+      "properties": {
+        "runAsNonRoot": {
+          "type": "boolean",
+          "description": "Run containers as non-root user",
+          "default": true
+        },
+        "seccompProfile": {
+          "type": "object",
+          "description": "Seccomp profile configuration",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Seccomp profile type",
+              "enum": ["RuntimeDefault", "Localhost", "Unconfined"]
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "description": "Container security context settings",
+      "properties": {
+        "readOnlyRootFilesystem": {
+          "type": "boolean",
+          "description": "Mount root filesystem as read-only",
+          "default": true
+        },
+        "allowPrivilegeEscalation": {
+          "type": "boolean",
+          "description": "Allow privilege escalation",
+          "default": false
+        },
+        "capabilities": {
+          "type": "object",
+          "description": "Container capabilities",
+          "properties": {
+            "drop": {
+              "type": "array",
+              "description": "Capabilities to drop",
+              "items": {
+                "type": "string"
+              }
+            },
+            "add": {
+              "type": "array",
+              "description": "Capabilities to add",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "serviceAccount": {
+      "type": "object",
+      "description": "Service account configuration",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Specifies whether a service account should be created",
+          "default": true
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the service account to use (if not set, will use release name)"
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Annotations to add to the service account",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["create"],
+      "additionalProperties": false
+    },
+    "affinity": {
+      "type": "object",
+      "description": "Pod affinity settings",
+      "properties": {
+        "nodeAffinity": {
+          "type": "object",
+          "description": "Node affinity configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable node affinity",
+              "default": false
+            },
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+              "type": "object",
+              "description": "Required node affinity",
+              "properties": {
+                "nodeSelectorTerms": {
+                  "type": "array",
+                  "description": "Node selector terms",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "matchExpressions": {
+                        "type": "array",
+                        "description": "Match expressions",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "description": "Label key"
+                            },
+                            "operator": {
+                              "type": "string",
+                              "description": "Selection operator",
+                              "enum": ["In", "NotIn", "Exists", "DoesNotExist"]
+                            },
+                            "values": {
+                              "type": "array",
+                              "description": "Label values",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": ["key", "operator"],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "podAnnotations": {
+      "type": "object",
+      "description": "Annotations to add to the pod",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "description": "Node selector for pod scheduling",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array",
+      "description": "Pod tolerations",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Taint key"
+          },
+          "operator": {
+            "type": "string",
+            "description": "Toleration operator",
+            "enum": ["Equal", "Exists"]
+          },
+          "value": {
+            "type": "string",
+            "description": "Taint value"
+          },
+          "effect": {
+            "type": "string",
+            "description": "Taint effect",
+            "enum": ["NoSchedule", "PreferNoSchedule", "NoExecute"]
+          },
+          "tolerationSeconds": {
+            "type": "integer",
+            "description": "Toleration seconds",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "livenessProbe": {
+      "type": "object",
+      "description": "Liveness probe configuration",
+      "properties": {
+        "initialDelaySeconds": {
+          "type": "integer",
+          "description": "Initial delay before probe starts",
+          "minimum": 0,
+          "default": 15
+        },
+        "periodSeconds": {
+          "type": "integer",
+          "description": "How often to perform the probe",
+          "minimum": 1,
+          "default": 20
+        }
+      },
+      "additionalProperties": true
+    },
+    "readinessProbe": {
+      "type": "object",
+      "description": "Readiness probe configuration",
+      "properties": {
+        "initialDelaySeconds": {
+          "type": "integer",
+          "description": "Initial delay before probe starts",
+          "minimum": 0,
+          "default": 5
+        },
+        "periodSeconds": {
+          "type": "integer",
+          "description": "How often to perform the probe",
+          "minimum": 1,
+          "default": 10
+        }
+      },
+      "additionalProperties": true
+    },
+    "leaderElection": {
+      "type": "object",
+      "description": "Leader election configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable leader election",
+          "default": true
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "installCRDs": {
+      "type": "boolean",
+      "description": "Install Custom Resource Definitions (cert-manager custom resources)",
+      "default": true
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Metrics and monitoring configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the metrics endpoint",
+          "default": true
+        },
+        "port": {
+          "type": "integer",
+          "description": "The port to expose metrics on",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8443
+        },
+        "secure": {
+          "type": "boolean",
+          "description": "Whether to use HTTPS for the metrics endpoint",
+          "default": true
+        },
+        "service": {
+          "type": "object",
+          "description": "Service configuration for metrics",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Type of service to create for metrics",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"],
+              "default": "ClusterIP"
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Annotations to add to the metrics service",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "description": "ServiceMonitor configuration for Prometheus Operator",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether to create a ServiceMonitor resource for Prometheus Operator",
+              "default": false
+            },
+            "additionalLabels": {
+              "type": "object",
+              "description": "Additional labels for the ServiceMonitor resource",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Namespace where the ServiceMonitor resource should be created"
+            },
+            "interval": {
+              "type": "string",
+              "description": "Interval at which metrics should be scraped",
+              "pattern": "^[0-9]+(s|m|h)$",
+              "default": "30s"
+            },
+            "scrapeTimeout": {
+              "type": "string",
+              "description": "Timeout for the scrape request",
+              "pattern": "^[0-9]+(s|m|h)$",
+              "default": "10s"
+            },
+            "tlsConfig": {
+              "type": "object",
+              "description": "TLS configuration for scraping",
+              "properties": {
+                "insecureSkipVerify": {
+                  "type": "boolean",
+                  "description": "Skip TLS verification",
+                  "default": true
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "required": ["enabled"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "namespace",
+    "image",
+    "replicaCount",
+    "serviceAccount",
+    "leaderElection",
+    "installCRDs",
+    "metrics"
+  ],
+  "additionalProperties": false
+}

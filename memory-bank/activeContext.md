@@ -21,6 +21,7 @@ The project is in active development with core functionality implemented:
 8. CNAME-based DNS validation implementation
 9. Added comprehensive NGINX Ingress integration examples
 10. Created detailed documentation for NGINX Ingress usage
+11. Added comprehensive JSON schema validation to Helm chart
 
 ## Active Decisions
 
@@ -52,6 +53,7 @@ The project is in active development with core functionality implemented:
 4. Add more test coverage
 5. Add DNS validation E2E tests
 6. Improve DNS solver documentation
+7. Automate Helm schema generation and verification
 
 ### Medium Term
 1. Add webhook validation
