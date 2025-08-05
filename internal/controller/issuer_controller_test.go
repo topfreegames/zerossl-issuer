@@ -95,8 +95,9 @@ var _ = Describe("Issuer Controller", func() {
 
 			By("Reconciling the created resource")
 			reconciler := &IssuerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:                  k8sClient,
+				Scheme:                  k8sClient.Scheme(),
+				maxConcurrentReconciles: 1,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -147,8 +148,9 @@ var _ = Describe("Issuer Controller", func() {
 
 			By("Reconciling the created resource")
 			reconciler := &IssuerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:                  k8sClient,
+				Scheme:                  k8sClient.Scheme(),
+				maxConcurrentReconciles: 1,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -234,8 +236,9 @@ var _ = Describe("Issuer Controller", func() {
 
 			By("Reconciling the created resource")
 			reconciler := &IssuerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:                  k8sClient,
+				Scheme:                  k8sClient.Scheme(),
+				maxConcurrentReconciles: 1,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{

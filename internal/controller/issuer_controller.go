@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
@@ -38,6 +39,17 @@ import (
 type IssuerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// maxConcurrentReconciles is the maximum number of concurrent reconciles
+	maxConcurrentReconciles int
+}
+
+// NewIssuerReconciler creates a new IssuerReconciler
+func NewIssuerReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *IssuerReconciler {
+	return &IssuerReconciler{
+		Client:                  k8sClient,
+		Scheme:                  scheme,
+		maxConcurrentReconciles: maxConcurrentReconciles,
+	}
 }
 
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch;delete
@@ -216,5 +228,8 @@ func (r *IssuerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&zerosslv1alpha1.Issuer{}).
 		Named("issuer").
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.maxConcurrentReconciles,
+		}).
 		Complete(r)
 }

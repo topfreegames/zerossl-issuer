@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -50,13 +51,16 @@ type ChallengeReconciler struct {
 	Scheme *runtime.Scheme
 	// clientFactory is a function that creates a new ZeroSSL client
 	clientFactory func(string) ZeroSSLClient
+	// maxConcurrentReconciles is the maximum number of concurrent reconciles
+	maxConcurrentReconciles int
 }
 
 // NewChallengeReconciler creates a new ChallengeReconciler
-func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme) *ChallengeReconciler {
+func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *ChallengeReconciler {
 	return &ChallengeReconciler{
-		Client: k8sClient,
-		Scheme: scheme,
+		Client:                  k8sClient,
+		Scheme:                  scheme,
+		maxConcurrentReconciles: maxConcurrentReconciles,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return zerossl.NewClient(apiKey)
 		},
@@ -498,5 +502,8 @@ func (r *ChallengeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&zerosslv1alpha1.Challenge{}).
 		Named("challenge").
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.maxConcurrentReconciles,
+		}).
 		Complete(r)
 }

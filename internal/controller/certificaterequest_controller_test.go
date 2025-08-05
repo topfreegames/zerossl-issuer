@@ -138,8 +138,9 @@ func TestCertificateRequestReconciler(t *testing.T) {
 
 	// Create the reconciler with a mock client that returns successful responses
 	reconciler := &CertificateRequestReconciler{
-		Client: client,
-		Scheme: scheme,
+		Client:                  client,
+		Scheme:                  scheme,
+		maxConcurrentReconciles: 1,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return &MockZeroSSLClient{
 				CreateCertificateResp: &zerossl.CertificateResponse{

@@ -64,6 +64,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var maxConcurrentReconciles int
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -82,6 +83,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1,
+		"The maximum number of concurrent Reconciles for all controllers which can be run. Defaults to 1.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -203,18 +206,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.IssuerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err := controller.NewIssuerReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		maxConcurrentReconciles,
+	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Issuer")
 		os.Exit(1)
 	}
 
-	if err := (&controller.ClusterIssuerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err := controller.NewClusterIssuerReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		maxConcurrentReconciles,
+	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterIssuer")
 		os.Exit(1)
 	}
@@ -222,6 +227,7 @@ func main() {
 	if err := controller.NewCertificateRequestReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CertificateRequest")
 		os.Exit(1)
@@ -230,6 +236,7 @@ func main() {
 	if err := controller.NewChallengeReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Challenge")
 		os.Exit(1)

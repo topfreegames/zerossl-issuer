@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
@@ -60,13 +61,16 @@ type CertificateRequestReconciler struct {
 	Scheme *runtime.Scheme
 	// clientFactory is a function that creates a new ZeroSSL client
 	clientFactory func(string) ZeroSSLClient
+	// maxConcurrentReconciles is the maximum number of concurrent reconciles
+	maxConcurrentReconciles int
 }
 
 // NewCertificateRequestReconciler creates a new CertificateRequestReconciler
-func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Scheme) *CertificateRequestReconciler {
+func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *CertificateRequestReconciler {
 	return &CertificateRequestReconciler{
-		Client: k8sClient,
-		Scheme: scheme,
+		Client:                  k8sClient,
+		Scheme:                  scheme,
+		maxConcurrentReconciles: maxConcurrentReconciles,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return zerossl.NewClient(apiKey)
 		},
@@ -82,7 +86,6 @@ func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Sc
 
 func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Reconciling CertificateRequest", "namespace", req.Namespace, "name", req.Name)
 
 	// Get the CertificateRequest
 	cr := &cmapi.CertificateRequest{}
@@ -95,11 +98,9 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// Check if the CertificateRequest has been denied or completed
 	if isDenied(cr) {
-		logger.Info("CertificateRequest has been denied, not processing")
 		return ctrl.Result{}, nil
 	}
 	if isComplete(cr) {
-		logger.Info("CertificateRequest is complete, not processing")
 		return ctrl.Result{}, nil
 	}
 
@@ -123,6 +124,7 @@ func (r *CertificateRequestReconciler) isZeroSSLIssuer(cr *cmapi.CertificateRequ
 // processCertificateRequest handles the main certificate request processing logic
 func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Context, _ ctrl.Request, cr *cmapi.CertificateRequest) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	logger.Info("Reconciling CertificateRequest", "namespace", cr.Namespace, "name", cr.Name)
 
 	// Get the referenced issuer
 	issuer, err := r.getIssuerForCR(ctx, cr)
@@ -615,6 +617,9 @@ func (r *CertificateRequestReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cmapi.CertificateRequest{}).
 		Named("certificaterequest").
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.maxConcurrentReconciles,
+		}).
 		Complete(r)
 }
 
