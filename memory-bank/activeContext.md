@@ -19,6 +19,8 @@ The project is in active development with core functionality implemented:
 6. DNS solver implementation with Route53 support
 7. Enhanced domain matching for certificate requests
 8. CNAME-based DNS validation implementation
+9. Added comprehensive NGINX Ingress integration examples
+10. Created detailed documentation for NGINX Ingress usage
 
 ## Active Decisions
 
@@ -88,6 +90,7 @@ The project is in active development with core functionality implemented:
 3. Troubleshooting guide
 4. Development guide
 5. DNS solver configuration guide
+6. NGINX Ingress integration guide
 
 ## Known Issues
 1. Need to implement proper rate limiting

@@ -153,9 +153,59 @@ spec:
     kind: Issuer
     group: zerossl.cert-manager.io
   dnsNames:
-    - example.com
-    - "*.example.com"
+    - "*.example.com"  # ZeroSSL wildcard certificates must be single domain only
 ```
+
+### Using with NGINX Ingress Controller
+
+The ZeroSSL issuer integrates seamlessly with NGINX Ingress Controller using cert-manager annotations. Here's a basic example:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: default
+  annotations:
+    # Enable cert-manager to automatically create certificates
+    cert-manager.io/issuer: "zerossl-issuer"
+    cert-manager.io/issuer-kind: "Issuer"
+    cert-manager.io/issuer-group: "zerossl.cert-manager.io"
+    
+    # NGINX Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: app-tls-certificate
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80
+```
+
+#### Key annotations for ZeroSSL issuer:
+- `cert-manager.io/issuer`: Name of your ZeroSSL issuer
+- `cert-manager.io/issuer-kind`: Set to "Issuer" or "ClusterIssuer"
+- `cert-manager.io/issuer-group`: Set to "zerossl.cert-manager.io"
+
+#### Additional cert-manager annotations you can use:
+- `cert-manager.io/duration`: Certificate validity period (e.g., "2160h" for 90 days)
+- `cert-manager.io/renew-before`: When to start renewal process (e.g., "720h" for 30 days before expiry)
+
+**Important:** ZeroSSL wildcard certificates must be single domain only (e.g., `*.example.com`). You cannot combine wildcards with other domains in the same certificate.
+
+For more comprehensive examples including wildcard certificates and advanced configurations, see [config/samples/nginx_ingress_example.yaml](config/samples/nginx_ingress_example.yaml).
 
 ## Development
 

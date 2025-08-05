@@ -3,4 +3,5 @@ resources:
 - zerossl_v1alpha1_issuer.yaml
 - zerossl_v1alpha1_clusterissuer.yaml
 - zerossl_v1alpha1_challenge.yaml
+- nginx_ingress_example.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

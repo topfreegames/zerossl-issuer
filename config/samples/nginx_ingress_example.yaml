@@ -1,0 +1,308 @@
+# Example: Using ZeroSSL Issuer with NGINX Ingress Controller
+# This example demonstrates how to automatically obtain ZeroSSL certificates
+# for NGINX ingress resources using cert-manager annotations
+
+---
+# Step 1: Create the ZeroSSL API key secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: zerossl-api-key
+  namespace: default
+type: Opaque
+stringData:
+  api-key: "your-zerossl-api-key-here"
+
+---
+# Step 2: Create Route53 credentials secret (for DNS validation)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: route53-credentials
+  namespace: default
+type: Opaque
+stringData:
+  secret: "your-aws-secret-access-key-here"
+
+---
+# Step 3: Create the ZeroSSL Issuer with DNS solver
+apiVersion: zerossl.cert-manager.io/v1alpha1
+kind: Issuer
+metadata:
+  name: zerossl-issuer
+  namespace: default
+spec:
+  apiKeySecretRef:
+    name: zerossl-api-key
+    key: api-key
+  validityDays: 90
+  strictDomains: true
+  solvers:
+  - dns01:
+      route53:
+        accessKeyID: AKIAEXAMPLE123456789
+        hostedZoneID: Z2E9THH2A4HU6P
+        region: us-east-1
+        secretAccessKeySecretRef:
+          key: secret
+          name: route53-credentials
+    selector:
+      dnsZones:
+      - example.com
+
+---
+# Example 1: Basic NGINX Ingress with ZeroSSL certificate
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: default
+  annotations:
+    # Enable cert-manager to automatically create certificates
+    cert-manager.io/issuer: "zerossl-issuer"
+    cert-manager.io/issuer-kind: "Issuer"
+    cert-manager.io/issuer-group: "zerossl.cert-manager.io"
+    
+    # NGINX Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - app.example.com
+    - api.example.com
+    secretName: app-tls-certificate
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Example 2: Wildcard certificate with NGINX Ingress (single domain only)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wildcard-ingress
+  namespace: default
+  annotations:
+    # Use ZeroSSL issuer for wildcard certificates (requires DNS validation)
+    cert-manager.io/issuer: "zerossl-issuer"
+    cert-manager.io/issuer-kind: "Issuer"
+    cert-manager.io/issuer-group: "zerossl.cert-manager.io"
+    
+    # NGINX Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Optional: Custom certificate duration
+    cert-manager.io/duration: "2160h"  # 90 days
+    cert-manager.io/renew-before: "720h"  # 30 days before expiry
+spec:
+  tls:
+  - hosts:
+    - "*.example.com"  # ZeroSSL wildcard certificates must be single domain only
+    secretName: wildcard-tls-certificate
+  rules:
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+  - host: blog.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: blog-service
+            port:
+              number: 80
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Example 3: Multiple domains with custom configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-domain-ingress
+  namespace: default
+  annotations:
+    # ZeroSSL issuer configuration
+    cert-manager.io/issuer: "zerossl-issuer"
+    cert-manager.io/issuer-kind: "Issuer"
+    cert-manager.io/issuer-group: "zerossl.cert-manager.io"
+    
+    # NGINX Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Advanced NGINX configurations
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    
+    # Custom SSL configuration
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384"
+spec:
+  tls:
+  - hosts:
+    - shop.example.com
+    - checkout.example.com
+    secretName: shop-tls-certificate
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: shop-frontend
+            port:
+              number: 80
+  - host: checkout.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: checkout-service
+            port:
+              number: 80
+
+---
+# Example services (for demonstration purposes)
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+  namespace: default
+spec:
+  selector:
+    app: my-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: default
+spec:
+  selector:
+    app: my-api
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: website-service
+  namespace: default
+spec:
+  selector:
+    app: website
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+  namespace: default
+spec:
+  selector:
+    app: admin-panel
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blog-service
+  namespace: default
+spec:
+  selector:
+    app: blog
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-frontend
+  namespace: default
+spec:
+  selector:
+    app: shop
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-service
+  namespace: default
+spec:
+  selector:
+    app: checkout
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP

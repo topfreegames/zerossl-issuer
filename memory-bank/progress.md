@@ -51,10 +51,11 @@
 
 ### Documentation
 🔄 API documentation
-🔄 Usage examples
+✅ NGINX Ingress integration examples
+✅ Comprehensive usage examples
 🔄 Development guide
 🔄 Troubleshooting guide
-🔄 DNS solver documentation
+✅ DNS solver documentation
 
 ## To Do
 
