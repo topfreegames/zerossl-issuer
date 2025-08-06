@@ -72,6 +72,7 @@ zerossl-issuer:
 | `tolerations` | List of tolerations | `[]` |
 | `affinity.nodeAffinity.enabled` | Enable node affinity | `false` |
 | `leaderElection.enabled` | Enable leader election | `true` |
+| `controller.maxConcurrentReconciles` | Maximum number of concurrent reconciles for all controllers | `5` |
 | `installCRDs` | Install CRDs | `true` |
 
 ### Namespace Configuration
@@ -119,6 +120,26 @@ Use this when installing or upgrading the chart:
 ```bash
 helm install zerossl-issuer ./helm/zerossl-issuer -f values.yaml
 ```
+
+### Controller Performance Configuration
+
+For high-volume environments, you can tune the controller's concurrency settings to improve performance:
+
+```yaml
+# values.yaml
+controller:
+  # Increase concurrent reconciles for better throughput
+  maxConcurrentReconciles: 10
+```
+
+The `maxConcurrentReconciles` parameter controls how many certificate requests, issuers, cluster issuers, and challenges can be processed simultaneously. The default value is 5, which provides good performance for most environments. For clusters with fewer certificates, you can reduce this value, and for high-volume environments, consider increasing it.
+
+**Recommendations:**
+- Small clusters (1-10 certificates): Set to 1-3
+- Medium clusters (10-100 certificates): Keep default value of 5
+- Large clusters (100+ certificates): Set to 10-20
+
+**Note:** Higher values require more CPU and memory resources. Monitor resource usage and adjust accordingly.
 
 ## Usage
 

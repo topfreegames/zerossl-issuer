@@ -95,6 +95,11 @@ readinessProbe:
 leaderElection:
   enabled: true
 
+# Controller performance settings
+controller:
+  # Maximum number of concurrent reconciles for all controllers
+  maxConcurrentReconciles: 5
+
 # Install CRDs (cert-manager custom resources)
 installCRDs: true
 

@@ -83,8 +83,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1,
-		"The maximum number of concurrent Reconciles for all controllers which can be run. Defaults to 1.")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 5,
+		"The maximum number of concurrent Reconciles for all controllers which can be run. Defaults to 5.")
 	opts := zap.Options{
 		Development: true,
 	}

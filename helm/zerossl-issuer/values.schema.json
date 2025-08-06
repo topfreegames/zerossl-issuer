@@ -353,6 +353,21 @@
       "required": ["enabled"],
       "additionalProperties": false
     },
+    "controller": {
+      "type": "object",
+      "description": "Controller performance and behavior settings",
+      "properties": {
+        "maxConcurrentReconciles": {
+          "type": "integer",
+          "description": "Maximum number of concurrent reconciles for all controllers",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 5
+        }
+      },
+      "required": ["maxConcurrentReconciles"],
+      "additionalProperties": false
+    },
     "installCRDs": {
       "type": "boolean",
       "description": "Install Custom Resource Definitions (cert-manager custom resources)",
@@ -459,6 +474,7 @@
     "replicaCount",
     "serviceAccount",
     "leaderElection",
+    "controller",
     "installCRDs",
     "metrics"
   ],
