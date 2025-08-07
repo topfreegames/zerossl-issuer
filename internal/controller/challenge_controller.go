@@ -40,8 +40,6 @@ import (
 )
 
 const (
-	// StatusIssued represents the "issued" certificate status from ZeroSSL
-	StatusIssued = "issued"
 	// ChallengeFinalizer is the name of the finalizer used to clean up Route53 DNS records
 	ChallengeFinalizer = "zerossl.cert-manager.io/dns-cleanup"
 )

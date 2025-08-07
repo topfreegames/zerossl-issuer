@@ -343,9 +343,15 @@ func (r *CertificateRequestReconciler) createNewCertificate(
 	// Record success event for certificate creation
 	r.recorder.Event(cr, corev1.EventTypeNormal, "CertificateCreated", fmt.Sprintf("Certificate created with ZeroSSL (ID: %s)", certID))
 
-	// Update the CertificateRequest with the annotation
+	// Set processing status condition
+	setProcessingCondition(cr, "CertificateProcessing", fmt.Sprintf("Certificate is being processed by ZeroSSL (ID: %s)", certID))
+
+	// Update the CertificateRequest with the annotation and status
 	if err := r.Update(ctx, cr); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update CertificateRequest annotations: %v", err)
+	}
+	if err := r.Status().Update(ctx, cr); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update CertificateRequest status: %v", err)
 	}
 
 	// If using DNS validation, get validation data and return to wait for DNS records to be created
@@ -353,7 +359,8 @@ func (r *CertificateRequestReconciler) createNewCertificate(
 		return r.handleDNSValidation(ctx, cr, zerosslClient, certID)
 	}
 
-	return ctrl.Result{}, nil
+	// For HTTP validation or other methods, requeue to check certificate status
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }
 
 // handleDNSValidation processes DNS validation for a certificate
@@ -373,6 +380,12 @@ func (r *CertificateRequestReconciler) handleDNSValidation(
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Set processing status for DNS validation
+	setProcessingCondition(cr, "DNSValidationPending", fmt.Sprintf("Waiting for DNS validation to complete for certificate %s", certID))
+	if err := r.Status().Update(ctx, cr); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 	}
 
 	// Log validation records for DNS solver to create
@@ -430,7 +443,12 @@ func (r *CertificateRequestReconciler) handleExistingCertificate(
 		return r.downloadAndFinalizeCertificate(ctx, cr, zerosslClient, certID)
 	}
 
-	// If not issued and not using DNS validation, just wait
+	// If not issued and not using DNS validation, set processing state and wait
+	setProcessingCondition(cr, "CertificateProcessing", fmt.Sprintf("Certificate %s is still being processed by ZeroSSL (status: %s)", certID, certInfo.Status))
+	if err := r.Status().Update(ctx, cr); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
+	}
+
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }
 
@@ -556,7 +574,7 @@ func (r *CertificateRequestReconciler) handleChallengeResource(
 	// Challenge exists, check its status
 	isReady := false
 	for _, condition := range challenge.Status.Conditions {
-		if condition.Type == "Ready" {
+		if condition.Type == ConditionReady {
 			if condition.Status == metav1.ConditionTrue {
 				isReady = true
 				break
@@ -579,13 +597,21 @@ func (r *CertificateRequestReconciler) handleChallengeResource(
 			return r.downloadAndFinalizeCertificate(ctx, cr, zerosslClient, certID)
 		}
 
-		// Certificate still not issued, wait
+		// Certificate still not issued, set processing state and wait
 		logger.Info("Certificate validation successful but not issued yet", "certificate", certID, "status", certInfo.Status)
+		setProcessingCondition(cr, "CertificateProcessing", fmt.Sprintf("DNS validation completed, certificate %s is being processed by ZeroSSL (status: %s)", certID, certInfo.Status))
+		if err := r.Status().Update(ctx, cr); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Challenge is still processing, wait
+	// Challenge is still processing, set processing state and wait
 	logger.Info("Challenge is still processing", "challenge", challengeName)
+	setProcessingCondition(cr, "DNSValidationPending", fmt.Sprintf("Waiting for DNS challenge %s to complete for certificate %s", challengeName, certID))
+	if err := r.Status().Update(ctx, cr); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
+	}
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }
 
@@ -715,6 +741,33 @@ func setReadyCondition(cr *cmapi.CertificateRequest, reason, message string) {
 	cr.Status.Conditions = append(cr.Status.Conditions, cmapi.CertificateRequestCondition{
 		Type:               ConditionReady,
 		Status:             cmmeta.ConditionTrue,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: &now,
+	})
+}
+
+func setProcessingCondition(cr *cmapi.CertificateRequest, reason, message string) {
+	now := metav1.Now()
+
+	// Check if there's already a Ready condition and update it to False with processing status
+	for i, condition := range cr.Status.Conditions {
+		if condition.Type == ConditionReady {
+			cr.Status.Conditions[i] = cmapi.CertificateRequestCondition{
+				Type:               ConditionReady,
+				Status:             cmmeta.ConditionFalse,
+				Reason:             reason,
+				Message:            message,
+				LastTransitionTime: &now,
+			}
+			return
+		}
+	}
+
+	// If no Ready condition exists, append a new one with False status
+	cr.Status.Conditions = append(cr.Status.Conditions, cmapi.CertificateRequestCondition{
+		Type:               ConditionReady,
+		Status:             cmmeta.ConditionFalse,
 		Reason:             reason,
 		Message:            message,
 		LastTransitionTime: &now,

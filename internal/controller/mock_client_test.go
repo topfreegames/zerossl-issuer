@@ -20,6 +20,10 @@ import (
 	"github.com/topfreegames/zerossl-issuer/internal/zerossl"
 )
 
+const (
+	testDomain = "test.example.com"
+)
+
 // MockZeroSSLClient is a mock implementation of ZeroSSLClient for testing
 type MockZeroSSLClient struct {
 	CreateCertificateResp *zerossl.CertificateResponse
@@ -104,7 +108,7 @@ func (m *MockZeroSSLClient) InitiateValidation(id string, method zerossl.Validat
 	}
 
 	// Default response with CNAME validation
-	domain := "test.example.com"
+	domain := testDomain
 	validation := zerossl.ValidationInfo{
 		EmailValidation: make(map[string][]string),
 		OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),
@@ -139,7 +143,7 @@ func (m *MockZeroSSLClient) GetCertificate(id string) (*zerossl.CertificateRespo
 	}
 
 	// Default response with CNAME validation
-	domain := "test.example.com"
+	domain := testDomain
 	validation := zerossl.ValidationInfo{
 		EmailValidation: make(map[string][]string),
 		OtherMethods:    make(map[string]zerossl.ValidationOtherMethodDetails),

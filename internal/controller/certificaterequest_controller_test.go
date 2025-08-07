@@ -44,10 +44,16 @@ import (
 
 // Using shared MockZeroSSLClient from mock_client_test.go
 
-func generateTestCSR(t *testing.T, commonName string, dnsNames []string) []byte {
+func generateTestCSR(t *testing.T, dnsNames []string) []byte {
 	// Generate a private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
+
+	// Use the first DNS name as common name, or default
+	commonName := "test.example.com"
+	if len(dnsNames) > 0 {
+		commonName = dnsNames[0]
+	}
 
 	// Create a CSR template
 	template := &x509.CertificateRequest{
@@ -72,7 +78,7 @@ func generateTestCSR(t *testing.T, commonName string, dnsNames []string) []byte 
 
 func TestCertificateRequestReconciler(t *testing.T) {
 	// Create a test CSR
-	csrPEM := generateTestCSR(t, "test.example.com", []string{"test.example.com", "test2.example.com"})
+	csrPEM := generateTestCSR(t, []string{"test.example.com", "test2.example.com"})
 
 	// Create test objects
 	issuer := &zerosslv1alpha1.Issuer{
@@ -205,7 +211,7 @@ func TestCertificateRequestReconciler(t *testing.T) {
 	// Check that the Ready condition was set
 	var readyCondition *cmapi.CertificateRequestCondition
 	for _, cond := range updatedCR.Status.Conditions {
-		if cond.Type == "Ready" {
+		if cond.Type == ConditionReady {
 			readyCondition = &cond
 		}
 	}
@@ -219,9 +225,192 @@ func TestCertificateRequestReconciler(t *testing.T) {
 	// The CA field is not set anymore as it's included in the certificate chain
 }
 
+func TestCertificateRequestProcessingStatus(t *testing.T) {
+	// Create a test CSR
+	csrPEM := generateTestCSR(t, []string{"test.example.com"})
+
+	// Create test objects
+	issuer := &zerosslv1alpha1.Issuer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-issuer",
+			Namespace: "default",
+		},
+		Spec: zerosslv1alpha1.IssuerSpec{
+			APIKeySecretRef: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: "test-secret",
+				},
+				Key: "api-key",
+			},
+			ValidityDays: 90,
+		},
+		Status: zerosslv1alpha1.IssuerStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: metav1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	certificateRequest := &cmapi.CertificateRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cr",
+			Namespace: "default",
+		},
+		Spec: cmapi.CertificateRequestSpec{
+			Request: csrPEM,
+			IssuerRef: cmmeta.ObjectReference{
+				Group: "zerossl.cert-manager.io",
+				Kind:  "Issuer",
+				Name:  "test-issuer",
+			},
+		},
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"api-key": []byte("test-api-key"),
+		},
+	}
+
+	// Create a fake client with the objects
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, cmapi.AddToScheme(scheme))
+	require.NoError(t, zerosslv1alpha1.AddToScheme(scheme))
+	require.NoError(t, cmmeta.AddToScheme(scheme))
+
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(issuer, certificateRequest, secret).
+		WithStatusSubresource(&cmapi.CertificateRequest{}).
+		Build()
+
+	// Create a reconciler with a mock client that returns "pending" status
+	reconciler := &CertificateRequestReconciler{
+		Client:                  client,
+		Scheme:                  scheme,
+		recorder:                record.NewFakeRecorder(10),
+		maxConcurrentReconciles: 1,
+		clientFactory: func(apiKey string) ZeroSSLClient {
+			return &MockZeroSSLClient{
+				CreateCertificateResp: &zerossl.CertificateResponse{
+					ID:     "test-cert-id",
+					Status: "pending", // Certificate is still processing
+				},
+				GetCertificateResp: &zerossl.CertificateResponse{
+					ID:     "test-cert-id",
+					Status: "pending", // Still processing
+				},
+			}
+		},
+	}
+
+	// First reconciliation - this will create the certificate and set processing status
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-cr",
+			Namespace: "default",
+		},
+	})
+	require.NoError(t, err)
+
+	// Check that the CertificateRequest was updated with the annotation
+	updatedCR := &cmapi.CertificateRequest{}
+	err = client.Get(context.Background(), types.NamespacedName{
+		Name:      "test-cr",
+		Namespace: "default",
+	}, updatedCR)
+	require.NoError(t, err)
+
+	// Check that the certificate ID annotation was set
+	assert.Contains(t, updatedCR.Annotations, CertificateRequestIDAnnotation)
+	assert.Equal(t, "test-cert-id", updatedCR.Annotations[CertificateRequestIDAnnotation])
+
+	// Second reconciliation - certificate is still processing, now we should see the processing status
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-cr",
+			Namespace: "default",
+		},
+	})
+	require.NoError(t, err)
+
+	// Get the updated CertificateRequest again
+	updatedCR = &cmapi.CertificateRequest{}
+	err = client.Get(context.Background(), types.NamespacedName{
+		Name:      "test-cr",
+		Namespace: "default",
+	}, updatedCR)
+	require.NoError(t, err)
+
+	// Verify the processing status is set
+	var readyCondition *cmapi.CertificateRequestCondition
+	for _, cond := range updatedCR.Status.Conditions {
+		if cond.Type == ConditionReady {
+			readyCondition = &cond
+		}
+	}
+	require.NotNil(t, readyCondition, "Ready condition not found, available conditions: %v", updatedCR.Status.Conditions)
+	assert.Equal(t, cmmeta.ConditionFalse, readyCondition.Status)
+	assert.Equal(t, "CertificateProcessing", readyCondition.Reason)
+	assert.Contains(t, readyCondition.Message, "is still being processed")
+
+	// Update mock to return issued status
+	reconciler.clientFactory = func(apiKey string) ZeroSSLClient {
+		return &MockZeroSSLClient{
+			GetCertificateResp: &zerossl.CertificateResponse{
+				ID:     "test-cert-id",
+				Status: "issued", // Now issued
+			},
+			DownloadCertificateResp: &zerossl.DownloadCertificateResponse{
+				Certificate:   "test-certificate",
+				CACertificate: "test-ca-certificate",
+			},
+		}
+	}
+
+	// Third reconciliation - certificate is now issued
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-cr",
+			Namespace: "default",
+		},
+	})
+	require.NoError(t, err)
+
+	// Get the final updated CertificateRequest
+	updatedCR = &cmapi.CertificateRequest{}
+	err = client.Get(context.Background(), types.NamespacedName{
+		Name:      "test-cr",
+		Namespace: "default",
+	}, updatedCR)
+	require.NoError(t, err)
+
+	// Verify the Ready condition is now True
+	for _, cond := range updatedCR.Status.Conditions {
+		if cond.Type == ConditionReady {
+			readyCondition = &cond
+		}
+	}
+	require.NotNil(t, readyCondition)
+	assert.Equal(t, cmmeta.ConditionTrue, readyCondition.Status)
+	assert.Equal(t, "Issued", readyCondition.Reason)
+	assert.Equal(t, "Certificate has been issued successfully", readyCondition.Message)
+
+	// Check that the certificate was set
+	assert.NotEmpty(t, updatedCR.Status.Certificate)
+}
+
 func TestGetDNSNamesFromCSR(t *testing.T) {
 	// Create a test CSR with DNS names
-	csrPEM := generateTestCSR(t, "test.example.com", []string{"test.example.com", "test2.example.com"})
+	csrPEM := generateTestCSR(t, []string{"test.example.com", "test2.example.com"})
 
 	// Test getting DNS names from the CSR
 	dnsNames, err := getDNSNamesFromCSR(csrPEM)
@@ -229,7 +418,7 @@ func TestGetDNSNamesFromCSR(t *testing.T) {
 	assert.ElementsMatch(t, []string{"test.example.com", "test2.example.com"}, dnsNames)
 
 	// Test getting DNS names from a CSR with only CommonName
-	csrPEM = generateTestCSR(t, "test.example.com", nil)
+	csrPEM = generateTestCSR(t, nil)
 
 	dnsNames, err = getDNSNamesFromCSR(csrPEM)
 	require.NoError(t, err)

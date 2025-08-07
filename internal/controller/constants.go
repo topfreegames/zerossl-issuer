@@ -28,4 +28,7 @@ const (
 
 	// CertManagerNamespace is the namespace where cert-manager resources are located
 	CertManagerNamespace = "cert-manager"
+
+	// StatusIssued represents the "issued" certificate status from ZeroSSL
+	StatusIssued = "issued"
 )
