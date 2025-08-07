@@ -290,35 +290,50 @@ type ZeroSSLErrorResponse struct {
 
 // handleResponse handles the API response and returns an error if the response is not successful
 func handleResponse(resp *http.Response) error {
+	// Always read and preserve the body so callers can decode it
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %v", err)
+	}
+	// Reset the response body for caller consumption
+	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+
+	// Attempt to detect ZeroSSL envelope by checking for "success" key
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err == nil {
+		if _, hasSuccess := raw["success"]; hasSuccess {
+			// Parse into structured type
+			var errorResp ZeroSSLErrorResponse
+			if err := json.Unmarshal(body, &errorResp); err == nil {
+				if !errorResp.Success {
+					// Non-2xx + failure -> always error
+					if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+						return &errorResp.Error
+					}
+					// Code 0 means DCV pending -> not an error
+					if errorResp.Error.Code == ErrorDomainControlValidationFailed {
+						return nil
+					}
+					// Non-zero is a real API error
+					if errorResp.Error.Code > 0 {
+						return &errorResp.Error
+					}
+				} else {
+					// success:true - return according to HTTP status
+					if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+						return nil
+					}
+					return fmt.Errorf("unexpected API response: status code %d, body: %s", resp.StatusCode, string(body))
+				}
+			}
+		}
+	}
+
+	// If status is successful and body doesn't have an error envelope, consider it OK
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
 
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read error response body: %v", err)
-	}
-
-	// Reset the response body for further reading
-	resp.Body = io.NopCloser(strings.NewReader(string(body)))
-
-	// Try to parse as ZeroSSL error format
-	var errorResp ZeroSSLErrorResponse
-	if err := json.Unmarshal(body, &errorResp); err != nil {
-		return fmt.Errorf("failed to decode error response: %v (status code: %d, body: %s)", err, resp.StatusCode, string(body))
-	}
-
-	// Check if we have a valid error response
-	if !errorResp.Success && errorResp.Error.Code > 0 {
-		return &errorResp.Error
-	}
-
-	// It's not an error, just means the validation is still in progress
-	if errorResp.Error.Code == ErrorDomainControlValidationFailed {
-		return nil
-	}
-
-	// If we couldn't parse the error properly, return a generic error
+	// Non-2xx without a parsable ZeroSSL error payload
 	return fmt.Errorf("unexpected API response: status code %d, body: %s", resp.StatusCode, string(body))
 }

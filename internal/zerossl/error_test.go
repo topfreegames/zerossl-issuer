@@ -56,6 +56,89 @@ func TestErrorParsing(t *testing.T) {
 	}
 }
 
+func TestHandleResponse_200WithErrorCode0_ShouldNotFail(t *testing.T) {
+	// ZeroSSL returns success:false with code 0 while DCV is pending
+	payload := ZeroSSLErrorResponse{
+		Success: false,
+		Error: Error{
+			Code: ErrorDomainControlValidationFailed,
+			Type: "domain_control_validation_failed",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(data))}
+
+	if err := handleResponse(resp); err != nil {
+		t.Fatalf("expected nil error for code 0, got %v", err)
+	}
+}
+
+func TestHandleResponse_200WithErrorNonZero_ShouldFail(t *testing.T) {
+	payload := ZeroSSLErrorResponse{
+		Success: false,
+		Error: Error{
+			Code: ErrorFailedValidatingCertificate,
+			Type: "failed_validating_certificate",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(data))}
+
+	err = handleResponse(resp)
+	if err == nil {
+		t.Fatal("expected non-nil error for non-zero error code")
+	}
+	if zerr, ok := AsError(err); !ok {
+		t.Fatalf("expected ZeroSSL error, got %T", err)
+	} else if zerr.Code != ErrorFailedValidatingCertificate {
+		t.Fatalf("unexpected code: %d", zerr.Code)
+	}
+}
+
+func TestHandleResponse_200WithCertificatePayload_ShouldSucceed(t *testing.T) {
+	payload := CertificateResponse{ID: "abc", Status: "draft"}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(data))}
+
+	if err := handleResponse(resp); err != nil {
+		t.Fatalf("expected nil error for certificate payload, got %v", err)
+	}
+
+	// ensure body is still readable by caller after handleResponse
+	var out CertificateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("failed to decode preserved body: %v", err)
+	}
+	if out.ID != "abc" || out.Status != "draft" {
+		t.Fatalf("unexpected decoded payload: %+v", out)
+	}
+}
+
+func TestHandleResponse_Non2xxWithoutZeroSSLError_ShouldFail(t *testing.T) {
+	data := []byte(`{"message":"oops"}`)
+	resp := &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(bytes.NewReader(data))}
+	if err := handleResponse(resp); err == nil {
+		t.Fatal("expected error for non-2xx without ZeroSSL envelope")
+	}
+}
+
+func TestHandleResponse_WeirdSuccessTrueOnNon2xx_ShouldFail(t *testing.T) {
+	payload := []byte(`{"success":true}`)
+	resp := &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(bytes.NewReader(payload))}
+	if err := handleResponse(resp); err == nil {
+		t.Fatal("expected error for non-2xx even if success:true")
+	}
+}
+
 func TestErrorHelpers(t *testing.T) {
 	testCases := []struct {
 		name           string

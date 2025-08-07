@@ -40,7 +40,7 @@
 🔄 Certificate renewal handling
 🔄 Error handling improvements
 🔄 Status updates
-🔄 DNS validation error handling
+✅ DNS validation error handling (client now propagates ZeroSSL non-zero errors; code 0 treated as pending)
 
 ### Testing
 🔄 Expanding test coverage
@@ -109,7 +109,7 @@
 1. Rate limiting not implemented
 2. Test coverage needs improvement
 3. Documentation incomplete
-4. Error handling needs enhancement
+4. Error handling needs enhancement [PARTIALLY RESOLVED for DNS validation]
 5. Limited to Route53 DNS provider
 6. DNS propagation timing needs tuning
 

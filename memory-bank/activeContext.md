@@ -113,7 +113,13 @@ The project is in active development with core functionality implemented:
 3. Documentation needs enhancement
 4. Metrics need expansion
 5. Limited to Route53 DNS provider
-6. DNS validation error handling needs improvement
+6. DNS validation error handling needs improvement [RESOLVED]: Improved client response handling; monitor in E2E
+
+## Recent Changes (Aug 2025)
+14. Fixed ZeroSSL validation error handling in client:
+    - Updated response handling to parse ZeroSSL envelopes even on HTTP 2xx
+    - Treat error code 0 (DCV pending) as non-fatal; propagate non-zero codes as errors
+    - Ensures Challenges are marked Failed when domain verification genuinely fails
 7. DNS propagation timing needs tuning
 
 ## Active Considerations

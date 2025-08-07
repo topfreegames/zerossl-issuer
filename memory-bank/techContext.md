@@ -199,4 +199,7 @@ This follows cert-manager conventions where ClusterIssuers use cluster-scoped re
 3. Controller creates Challenge resource with validation records
 4. Challenge controller creates CNAME records in Route53
 5. Controller verifies DNS validation via ZeroSSL API
-6. Certificate is issued after successful validation 
+   - Client inspects ZeroSSL response envelope even for HTTP 2xx
+   - Treats `error.code == 0` as pending (not an error)
+   - Returns errors for non-zero codes (e.g., 2823 failed_validating_certificate)
+6. Certificate is issued after successful validation
