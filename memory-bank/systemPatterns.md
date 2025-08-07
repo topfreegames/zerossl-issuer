@@ -85,6 +85,7 @@
 - Readiness probes
 - Detailed logging
 - Error tracking
+- Kubernetes event recording for meaningful scenarios
 
 ## Component Relationships
 

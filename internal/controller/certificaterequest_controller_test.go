@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -136,10 +137,14 @@ func TestCertificateRequestReconciler(t *testing.T) {
 		WithStatusSubresource(&cmapi.CertificateRequest{}).
 		Build()
 
+	// Create a fake event recorder
+	eventRecorder := record.NewFakeRecorder(100)
+
 	// Create the reconciler with a mock client that returns successful responses
 	reconciler := &CertificateRequestReconciler{
 		Client:                  client,
 		Scheme:                  scheme,
+		recorder:                eventRecorder,
 		maxConcurrentReconciles: 1,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return &MockZeroSSLClient{

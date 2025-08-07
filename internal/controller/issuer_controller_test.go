@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	zerosslv1alpha1 "github.com/topfreegames/zerossl-issuer/api/v1alpha1"
@@ -97,6 +98,7 @@ var _ = Describe("Issuer Controller", func() {
 			reconciler := &IssuerReconciler{
 				Client:                  k8sClient,
 				Scheme:                  k8sClient.Scheme(),
+				recorder:                record.NewFakeRecorder(100),
 				maxConcurrentReconciles: 1,
 			}
 
@@ -150,6 +152,7 @@ var _ = Describe("Issuer Controller", func() {
 			reconciler := &IssuerReconciler{
 				Client:                  k8sClient,
 				Scheme:                  k8sClient.Scheme(),
+				recorder:                record.NewFakeRecorder(100),
 				maxConcurrentReconciles: 1,
 			}
 
@@ -238,6 +241,7 @@ var _ = Describe("Issuer Controller", func() {
 			reconciler := &IssuerReconciler{
 				Client:                  k8sClient,
 				Scheme:                  k8sClient.Scheme(),
+				recorder:                record.NewFakeRecorder(100),
 				maxConcurrentReconciles: 1,
 			}
 

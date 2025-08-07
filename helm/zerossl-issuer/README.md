@@ -2,6 +2,20 @@
 
 This Helm chart installs the ZeroSSL cert-manager Issuer in your Kubernetes cluster. The ZeroSSL Issuer is a controller that integrates ZeroSSL with cert-manager, allowing you to obtain certificates through the ZeroSSL API.
 
+## Features
+
+- **Kubernetes Event Recording**: The controller automatically creates meaningful Kubernetes events for all certificate lifecycle operations, including:
+  - Certificate creation and issuance
+  - Validation failures and error conditions
+  - DNS record operations (creation/deletion)
+  - Issuer validation status changes
+  - Events are viewable via `kubectl describe` commands for enhanced debugging and monitoring
+
+- **DNS Validation Support**: Full support for DNS-01 challenge validation using Route53
+- **Performance Tuning**: Configurable concurrent reconciliation limits for optimal performance
+- **Security**: Runs with minimal privileges, read-only filesystem, and proper RBAC
+- **Monitoring**: Integrated Prometheus metrics and health probes
+
 ## Prerequisites
 
 - Kubernetes 1.16+

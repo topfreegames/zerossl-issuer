@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -39,15 +40,18 @@ import (
 type IssuerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// recorder is used to record events
+	recorder record.EventRecorder
 	// maxConcurrentReconciles is the maximum number of concurrent reconciles
 	maxConcurrentReconciles int
 }
 
 // NewIssuerReconciler creates a new IssuerReconciler
-func NewIssuerReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *IssuerReconciler {
+func NewIssuerReconciler(k8sClient client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, maxConcurrentReconciles int) *IssuerReconciler {
 	return &IssuerReconciler{
 		Client:                  k8sClient,
 		Scheme:                  scheme,
+		recorder:                recorder,
 		maxConcurrentReconciles: maxConcurrentReconciles,
 	}
 }
@@ -56,6 +60,7 @@ func NewIssuerReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxCon
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile handles the reconciliation loop for ZeroSSL issuers
 func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -82,6 +87,9 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Validate the issuer configuration
 	if err := r.validateIssuer(ctx, issuer); err != nil {
 		logger.Error(err, "Failed to validate issuer configuration")
+		// Record a warning event
+		r.recorder.Event(issuer, corev1.EventTypeWarning, "ValidationFailed", fmt.Sprintf("Failed to validate issuer configuration: %v", err))
+
 		// Update the Ready condition
 		meta.SetStatusCondition(&issuer.Status.Conditions, metav1.Condition{
 			Type:               "Ready",
@@ -101,6 +109,9 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Update the Ready condition to true
 	logger.Info("Issuer configuration validated successfully")
+	// Record a success event
+	r.recorder.Event(issuer, corev1.EventTypeNormal, "IssuerReady", "Issuer configuration validated and ready for use")
+
 	meta.SetStatusCondition(&issuer.Status.Conditions, metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,

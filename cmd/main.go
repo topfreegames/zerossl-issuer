@@ -209,6 +209,7 @@ func main() {
 	if err := controller.NewIssuerReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		mgr.GetEventRecorderFor("issuer-controller"),
 		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Issuer")
@@ -218,6 +219,7 @@ func main() {
 	if err := controller.NewClusterIssuerReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		mgr.GetEventRecorderFor("cluster-issuer-controller"),
 		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterIssuer")
@@ -227,6 +229,7 @@ func main() {
 	if err := controller.NewCertificateRequestReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		mgr.GetEventRecorderFor("certificate-request-controller"),
 		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CertificateRequest")
@@ -236,6 +239,7 @@ func main() {
 	if err := controller.NewChallengeReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		mgr.GetEventRecorderFor("challenge-controller"),
 		maxConcurrentReconciles,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Challenge")

@@ -25,6 +25,16 @@ The project is in active development with core functionality implemented:
 12. Updated challenge controller to properly handle AWS secret namespace resolution:
     - ClusterIssuer: AWS secrets looked up in cert-manager namespace
     - Issuer: AWS secrets looked up in challenge namespace
+13. Implemented comprehensive Kubernetes event recording across all controllers:
+    - Added event recording to IssuerReconciler for validation success/failure
+    - Added event recording to ClusterIssuerReconciler for validation success/failure
+    - Added event recording to CertificateRequestReconciler for certificate lifecycle events
+    - Added event recording to ChallengeReconciler for DNS validation and error scenarios
+    - Added proper RBAC permissions for event creation and patching
+    - Integrated event recorders in main.go controller setup
+    - Updated Helm chart with event RBAC permissions and documentation
+    - Fixed test failures due to missing event recorder mocks
+    - Resolved import shadowing linting issues
 
 ## Active Decisions
 

@@ -355,7 +355,7 @@
     },
     "controller": {
       "type": "object",
-      "description": "Controller performance and behavior settings",
+      "description": "Controller performance and behavior settings. The controller automatically creates Kubernetes events for certificate lifecycle operations.",
       "properties": {
         "maxConcurrentReconciles": {
           "type": "integer",

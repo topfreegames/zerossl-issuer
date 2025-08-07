@@ -77,6 +77,7 @@
 ❌ Automated testing of Helm chart
 
 ### Monitoring
+✅ Kubernetes event recording for meaningful scenarios
 ❌ Enhanced metrics
 ❌ Alerting rules
 ❌ Dashboard templates

@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,6 +60,8 @@ type ZeroSSLClient interface {
 type CertificateRequestReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// recorder is used to record events
+	recorder record.EventRecorder
 	// clientFactory is a function that creates a new ZeroSSL client
 	clientFactory func(string) ZeroSSLClient
 	// maxConcurrentReconciles is the maximum number of concurrent reconciles
@@ -66,10 +69,11 @@ type CertificateRequestReconciler struct {
 }
 
 // NewCertificateRequestReconciler creates a new CertificateRequestReconciler
-func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *CertificateRequestReconciler {
+func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, maxConcurrentReconciles int) *CertificateRequestReconciler {
 	return &CertificateRequestReconciler{
 		Client:                  k8sClient,
 		Scheme:                  scheme,
+		recorder:                recorder,
 		maxConcurrentReconciles: maxConcurrentReconciles,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return zerossl.NewClient(apiKey)
@@ -83,6 +87,7 @@ func NewCertificateRequestReconciler(k8sClient client.Client, scheme *runtime.Sc
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=issuers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=clusterissuers,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -144,6 +149,7 @@ func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Con
 
 	// Check if the issuer is ready
 	if !isIssuerReady(issuer) {
+		r.recorder.Event(cr, corev1.EventTypeWarning, "IssuerNotReady", "Referenced issuer is not ready")
 		setFailureCondition(cr, "IssuerNotReady", "Issuer is not ready")
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
@@ -160,6 +166,7 @@ func (r *CertificateRequestReconciler) processCertificateRequest(ctx context.Con
 	// Extract domains from the CSR
 	domains, err := getDNSNamesFromCSR(cr.Spec.Request)
 	if err != nil {
+		r.recorder.Event(cr, corev1.EventTypeWarning, "InvalidCSR", fmt.Sprintf("Failed to extract DNS names from CSR: %v", err))
 		setFailureCondition(cr, "InvalidCSR", fmt.Sprintf("Failed to get DNS names from CSR: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
@@ -318,6 +325,7 @@ func (r *CertificateRequestReconciler) createNewCertificate(
 
 	certResp, err := zerosslClient.CreateCertificate(certReq)
 	if err != nil {
+		r.recorder.Event(cr, corev1.EventTypeWarning, "CertificateCreationFailed", fmt.Sprintf("Failed to create certificate with ZeroSSL: %v", err))
 		setFailureCondition(cr, "CertificateIssuanceFailed", fmt.Sprintf("Failed to create certificate: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
@@ -331,6 +339,9 @@ func (r *CertificateRequestReconciler) createNewCertificate(
 	}
 	cr.Annotations[CertificateRequestIDAnnotation] = certResp.ID
 	certID := certResp.ID
+
+	// Record success event for certificate creation
+	r.recorder.Event(cr, corev1.EventTypeNormal, "CertificateCreated", fmt.Sprintf("Certificate created with ZeroSSL (ID: %s)", certID))
 
 	// Update the CertificateRequest with the annotation
 	if err := r.Update(ctx, cr); err != nil {
@@ -475,12 +486,12 @@ func (r *CertificateRequestReconciler) handleChallengeResource(
 				cnameTarget := validationDetails.CNAMEValidationP2
 
 				if cnameSource != "" && cnameTarget != "" {
-					record := zerosslv1alpha1.ValidationRecord{
+					validationRecord := zerosslv1alpha1.ValidationRecord{
 						Domain:     domain,
 						CNAMEName:  cnameSource,
 						CNAMEValue: cnameTarget,
 					}
-					validationRecords = append(validationRecords, record)
+					validationRecords = append(validationRecords, validationRecord)
 
 					logger.Info("Found CNAME validation record",
 						"domain", domain,
@@ -588,6 +599,7 @@ func (r *CertificateRequestReconciler) downloadAndFinalizeCertificate(
 	// Download the certificate
 	downloadResp, err := zerosslClient.DownloadCertificate(certID)
 	if err != nil {
+		r.recorder.Event(cr, corev1.EventTypeWarning, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate from ZeroSSL: %v", err))
 		setFailureCondition(cr, "CertificateDownloadFailed", fmt.Sprintf("Failed to download certificate: %v", err))
 		if err := r.Status().Update(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
@@ -605,6 +617,9 @@ func (r *CertificateRequestReconciler) downloadAndFinalizeCertificate(
 
 	// Set the Ready condition
 	setReadyCondition(cr, "Issued", "Certificate has been issued successfully")
+	// Record success event for certificate issuance
+	r.recorder.Event(cr, corev1.EventTypeNormal, "CertificateIssued", fmt.Sprintf("Certificate successfully issued and downloaded from ZeroSSL (ID: %s)", certID))
+
 	if err := r.Status().Update(ctx, cr); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status: %v", err)
 	}

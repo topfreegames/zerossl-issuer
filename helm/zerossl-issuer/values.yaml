@@ -99,6 +99,11 @@ leaderElection:
 controller:
   # Maximum number of concurrent reconciles for all controllers
   maxConcurrentReconciles: 5
+  # Event recording settings
+  # The controller will automatically create Kubernetes events for meaningful scenarios
+  # including certificate creation, validation failures, DNS record operations, etc.
+  # These events are viewable via 'kubectl describe' commands and provide valuable
+  # debugging information for certificate issuance workflows
 
 # Install CRDs (cert-manager custom resources)
 installCRDs: true

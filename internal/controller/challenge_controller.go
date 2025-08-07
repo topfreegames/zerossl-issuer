@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -49,6 +50,8 @@ const (
 type ChallengeReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// recorder is used to record events
+	recorder record.EventRecorder
 	// clientFactory is a function that creates a new ZeroSSL client
 	clientFactory func(string) ZeroSSLClient
 	// maxConcurrentReconciles is the maximum number of concurrent reconciles
@@ -56,10 +59,11 @@ type ChallengeReconciler struct {
 }
 
 // NewChallengeReconciler creates a new ChallengeReconciler
-func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme, maxConcurrentReconciles int) *ChallengeReconciler {
+func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, maxConcurrentReconciles int) *ChallengeReconciler {
 	return &ChallengeReconciler{
 		Client:                  k8sClient,
 		Scheme:                  scheme,
+		recorder:                recorder,
 		maxConcurrentReconciles: maxConcurrentReconciles,
 		clientFactory: func(apiKey string) ZeroSSLClient {
 			return zerossl.NewClient(apiKey)
@@ -74,6 +78,7 @@ func NewChallengeReconciler(k8sClient client.Client, scheme *runtime.Scheme, max
 // +kubebuilder:rbac:groups=zerossl.cert-manager.io,resources=clusterissuers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *ChallengeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -158,8 +163,8 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 
 	// Check for Route53 configuration
 	// For each validation record, find appropriate solver
-	for _, record := range challenge.Spec.ValidationRecords {
-		domain := record.Domain
+	for _, validationRecord := range challenge.Spec.ValidationRecords {
+		domain := validationRecord.Domain
 		solver := findSolverForDomain(issuer, domain)
 
 		if solver == nil || solver.DNS01 == nil || solver.DNS01.Route53 == nil {
@@ -170,19 +175,23 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 		route53Config := solver.DNS01.Route53
 
 		// Apply CNAME record
-		err := r.applyRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, issuer, challenge.Namespace)
+		err := r.applyRoute53CNAMERecord(ctx, route53Config, validationRecord.CNAMEName, validationRecord.CNAMEValue, issuer, challenge.Namespace)
 		if err != nil {
 			logger.Error(err, "Failed to apply Route53 CNAME record",
 				"domain", domain,
-				"source", record.CNAMEName,
-				"target", record.CNAMEValue)
+				"source", validationRecord.CNAMEName,
+				"target", validationRecord.CNAMEValue)
 			return r.markChallengeFailed(ctx, challenge, "Route53Failed", fmt.Sprintf("Failed to apply Route53 CNAME record: %v", err))
 		}
 
 		logger.Info("Successfully applied Route53 CNAME record",
 			"domain", domain,
-			"source", record.CNAMEName,
-			"target", record.CNAMEValue)
+			"source", validationRecord.CNAMEName,
+			"target", validationRecord.CNAMEValue)
+
+		// Record success event for DNS record creation
+		r.recorder.Event(challenge, corev1.EventTypeNormal, "DNSRecordCreated",
+			fmt.Sprintf("Created DNS CNAME record %s -> %s for domain %s", validationRecord.CNAMEName, validationRecord.CNAMEValue, domain))
 	}
 
 	// Give DNS time to propagate
@@ -358,6 +367,7 @@ func (r *ChallengeReconciler) markChallengeProcessing(ctx context.Context, chall
 
 // markChallengeFailed updates the Challenge to indicate that it has failed
 func (r *ChallengeReconciler) markChallengeFailed(ctx context.Context, challenge *zerosslv1alpha1.Challenge, reason, message string) (ctrl.Result, error) {
+	r.recorder.Event(challenge, corev1.EventTypeWarning, reason, message)
 	setChallengeCondition(challenge, ConditionReady, metav1.ConditionFalse, reason, message)
 	if err := r.Status().Update(ctx, challenge); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Challenge status: %v", err)
@@ -367,6 +377,7 @@ func (r *ChallengeReconciler) markChallengeFailed(ctx context.Context, challenge
 
 // markChallengeSucceeded updates the Challenge to indicate that it has succeeded
 func (r *ChallengeReconciler) markChallengeSucceeded(ctx context.Context, challenge *zerosslv1alpha1.Challenge, reason, message string) (ctrl.Result, error) {
+	r.recorder.Event(challenge, corev1.EventTypeNormal, reason, message)
 	setChallengeCondition(challenge, ConditionReady, metav1.ConditionTrue, reason, message)
 	if err := r.Status().Update(ctx, challenge); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Challenge status: %v", err)
@@ -446,8 +457,8 @@ func (r *ChallengeReconciler) cleanupDNSRecords(ctx context.Context, challenge *
 	}
 
 	// Delete all validation records
-	for _, record := range challenge.Spec.ValidationRecords {
-		domain := record.Domain
+	for _, validationRecord := range challenge.Spec.ValidationRecords {
+		domain := validationRecord.Domain
 		solver := findSolverForDomain(issuer, domain)
 
 		if solver == nil || solver.DNS01 == nil || solver.DNS01.Route53 == nil {
@@ -458,20 +469,20 @@ func (r *ChallengeReconciler) cleanupDNSRecords(ctx context.Context, challenge *
 		route53Config := solver.DNS01.Route53
 
 		// Delete CNAME record
-		err := r.deleteRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, challenge.Namespace)
+		err := r.deleteRoute53CNAMERecord(ctx, route53Config, validationRecord.CNAMEName, validationRecord.CNAMEValue, challenge.Namespace)
 		if err != nil {
 			logger.Error(err, "Failed to delete Route53 CNAME record",
 				"domain", domain,
-				"source", record.CNAMEName,
-				"target", record.CNAMEValue)
+				"source", validationRecord.CNAMEName,
+				"target", validationRecord.CNAMEValue)
 			// Continue with other records even if one fails
 			continue
 		}
 
 		logger.Info("Successfully deleted Route53 CNAME record",
 			"domain", domain,
-			"source", record.CNAMEName,
-			"target", record.CNAMEValue)
+			"source", validationRecord.CNAMEName,
+			"target", validationRecord.CNAMEValue)
 	}
 
 	return nil
