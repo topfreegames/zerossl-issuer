@@ -8,10 +8,10 @@
 3. Keep changes focused and minimal
 4. Document changes in code and commit messages
 5. Update API documentation when changing CRDs
-6. Update the memory bank in `.memories` directory after significant changes
+6. Update the memory bank in `memory-bank` directory after significant changes
 
 ### Memory Bank Maintenance
-1. ALWAYS use `.memories` directory as the official memory bank location
+1. ALWAYS use `memory-bank` directory as the official memory bank location
 2. Update relevant memory bank files after implementing new features:
    - `systemPatterns.md`: Update for architectural changes
    - `techContext.md`: Update for technical implementation details
@@ -85,7 +85,7 @@
 2. Document API changes
 3. Update examples
 4. Include troubleshooting
-5. Keep memory bank in `.memories` accurate and up-to-date
+5. Keep memory bank in `memory-bank` accurate and up-to-date
 
 ## Testing Guidelines
 

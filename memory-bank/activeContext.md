@@ -22,6 +22,9 @@ The project is in active development with core functionality implemented:
 9. Added comprehensive NGINX Ingress integration examples
 10. Created detailed documentation for NGINX Ingress usage
 11. Added comprehensive JSON schema validation to Helm chart
+12. Updated challenge controller to properly handle AWS secret namespace resolution:
+    - ClusterIssuer: AWS secrets looked up in cert-manager namespace
+    - Issuer: AWS secrets looked up in challenge namespace
 
 ## Active Decisions
 

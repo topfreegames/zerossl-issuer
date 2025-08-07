@@ -170,7 +170,7 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 		route53Config := solver.DNS01.Route53
 
 		// Apply CNAME record
-		err := r.applyRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, challenge.Namespace)
+		err := r.applyRoute53CNAMERecord(ctx, route53Config, record.CNAMEName, record.CNAMEValue, issuer, challenge.Namespace)
 		if err != nil {
 			logger.Error(err, "Failed to apply Route53 CNAME record",
 				"domain", domain,
@@ -211,11 +211,22 @@ func (r *ChallengeReconciler) handleDNSChallenge(ctx context.Context, challenge 
 }
 
 // applyRoute53CNAMERecord applies a CNAME record to Route53
-func (r *ChallengeReconciler) applyRoute53CNAMERecord(ctx context.Context, route53Config *zerosslv1alpha1.ACMEChallengeSolverDNS01Route53, source, target string, namespace string) error {
+func (r *ChallengeReconciler) applyRoute53CNAMERecord(ctx context.Context, route53Config *zerosslv1alpha1.ACMEChallengeSolverDNS01Route53, source, target string, issuer *zerosslv1alpha1.Issuer, challengeNamespace string) error {
 	logger := log.FromContext(ctx)
 
+	// Determine the namespace for AWS secrets based on issuer type
+	// If the issuer has no namespace, it's from a ClusterIssuer and secrets should be in cert-manager namespace
+	secretNamespace := challengeNamespace
+	if issuer.Namespace == "" {
+		// This is from a ClusterIssuer, use cert-manager namespace for secrets
+		secretNamespace = CertManagerNamespace
+		logger.Info("Using cert-manager namespace for AWS secrets (ClusterIssuer)", "secretNamespace", secretNamespace)
+	} else {
+		logger.Info("Using challenge namespace for AWS secrets (Issuer)", "secretNamespace", secretNamespace)
+	}
+
 	// Create Route53 client
-	r53Client, err := aws.NewRoute53Client(ctx, r.Client, route53Config, namespace)
+	r53Client, err := aws.NewRoute53Client(ctx, r.Client, route53Config, secretNamespace)
 	if err != nil {
 		logger.Error(err, "Failed to create Route53 client",
 			"region", route53Config.Region,

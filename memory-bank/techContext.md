@@ -186,6 +186,13 @@ solvers:
 - dnsNames: Explicit domain list
 - dnsZones: Domain zones for wildcard matching
 
+#### AWS Secret Namespace Resolution
+The challenge controller determines the namespace for AWS credentials based on issuer type:
+- **ClusterIssuer**: AWS secrets are looked up in the `cert-manager` namespace (using `CertManagerNamespace` constant)
+- **Issuer**: AWS secrets are looked up in the challenge namespace (same as the certificate request)
+
+This follows cert-manager conventions where ClusterIssuers use cluster-scoped resources while Issuers use namespace-scoped resources.
+
 ### CNAME Validation Process
 1. Certificate request creates certificate in ZeroSSL API
 2. ZeroSSL provides CNAME validation details
