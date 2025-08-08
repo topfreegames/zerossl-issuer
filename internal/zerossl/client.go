@@ -51,6 +51,8 @@ const (
 	ErrorInternalErrorFailedProcessingCSR              = 2820
 	ErrorInternalErrorFailedCreatingCertificate        = 2821
 	ErrorFailedValidatingCertificate                   = 2823
+	// Validation gating code: certificate not ready to validate yet
+	ErrorCertificateNotReadyToValidate = 2831
 
 	// Certificate download error codes
 	ErrorCertificateNotIssued       = 2832
@@ -306,12 +308,17 @@ func handleResponse(resp *http.Response) error {
 			var errorResp ZeroSSLErrorResponse
 			if err := json.Unmarshal(body, &errorResp); err == nil {
 				if !errorResp.Success {
-					// Non-2xx + failure -> always error
+					// Non-2xx + failure -> always error unless it's a pending/soon-ready code
 					if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+						if errorResp.Error.Code == ErrorDomainControlValidationFailed ||
+							errorResp.Error.Code == ErrorCertificateNotReadyToValidate {
+							return nil
+						}
 						return &errorResp.Error
 					}
-					// Code 0 means DCV pending -> not an error
-					if errorResp.Error.Code == ErrorDomainControlValidationFailed {
+					// Code 0 (DCV pending) or 2831 (not ready to validate) -> not an error
+					if errorResp.Error.Code == ErrorDomainControlValidationFailed ||
+						errorResp.Error.Code == ErrorCertificateNotReadyToValidate {
 						return nil
 					}
 					// Non-zero is a real API error

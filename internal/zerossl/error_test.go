@@ -101,6 +101,26 @@ func TestHandleResponse_200WithErrorNonZero_ShouldFail(t *testing.T) {
 	}
 }
 
+func TestHandleResponse_200WithError2831_ShouldNotFail(t *testing.T) {
+	// certificate_not_ready_to_validate should be treated like pending
+	payload := ZeroSSLErrorResponse{
+		Success: false,
+		Error: Error{
+			Code: ErrorCertificateNotReadyToValidate,
+			Type: "certificate_not_ready_to_validate",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(data))}
+
+	if err := handleResponse(resp); err != nil {
+		t.Fatalf("expected nil error for code 2831, got %v", err)
+	}
+}
+
 func TestHandleResponse_200WithCertificatePayload_ShouldSucceed(t *testing.T) {
 	payload := CertificateResponse{ID: "abc", Status: "draft"}
 	data, err := json.Marshal(payload)
