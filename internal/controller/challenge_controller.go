@@ -269,7 +269,7 @@ func (r *ChallengeReconciler) getIssuerForChallenge(ctx context.Context, challen
 	// In a real implementation, you might want to store the full reference including namespace
 	cr := &cmapi.CertificateRequest{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: challenge.Namespace, Name: crName}, cr); err != nil {
-		return nil, fmt.Errorf("failed to get CertificateRequest: %v", err)
+		return nil, fmt.Errorf("failed to get CertificateRequest: %w", err)
 	}
 
 	// Get the issuer reference kind (default to "Issuer" if not specified)
@@ -448,10 +448,25 @@ func (r *ChallengeReconciler) cleanupDNSRecords(ctx context.Context, challenge *
 	logger := log.FromContext(ctx)
 	logger.Info("Cleaning up DNS records for challenge", "namespace", challenge.Namespace, "name", challenge.Name)
 
-	// First, get the issuer to access Route53 configuration
+	// Get the issuer to access Route53 configuration.
+	// If the CertificateRequest is already gone we cannot resolve the issuer's Route53
+	// config. There is nothing left to protect, so skip DNS cleanup and allow the
+	// finalizer to be removed.
 	issuer, err := r.getIssuerForChallenge(ctx, challenge)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("CertificateRequest no longer exists, skipping DNS cleanup",
+				"certificateRequest", challenge.Spec.CertificateRequestRef)
+			return nil
+		}
 		return fmt.Errorf("failed to get issuer during cleanup: %v", err)
+	}
+
+	// Use the same namespace logic as applyRoute53CNAMERecord: ClusterIssuer secrets
+	// live in the cert-manager namespace, not in the challenge namespace.
+	secretNamespace := challenge.Namespace
+	if issuer.Namespace == "" {
+		secretNamespace = CertManagerNamespace
 	}
 
 	// Delete all validation records
@@ -466,14 +481,11 @@ func (r *ChallengeReconciler) cleanupDNSRecords(ctx context.Context, challenge *
 
 		route53Config := solver.DNS01.Route53
 
-		// Delete CNAME record
-		err := r.deleteRoute53CNAMERecord(ctx, route53Config, validationRecord.CNAMEName, validationRecord.CNAMEValue, challenge.Namespace)
-		if err != nil {
+		if err := r.deleteRoute53CNAMERecord(ctx, route53Config, validationRecord.CNAMEName, validationRecord.CNAMEValue, secretNamespace); err != nil {
 			logger.Error(err, "Failed to delete Route53 CNAME record",
 				"domain", domain,
 				"source", validationRecord.CNAMEName,
 				"target", validationRecord.CNAMEValue)
-			// Continue with other records even if one fails
 			continue
 		}
 
