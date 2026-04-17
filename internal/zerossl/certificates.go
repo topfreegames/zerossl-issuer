@@ -153,7 +153,9 @@ func (c *Client) GetCertificate(id string) (*CertificateResponse, error) {
 
 // DownloadCertificate downloads the certificate and CA bundle for a given certificate ID
 func (c *Client) DownloadCertificate(id string) (*DownloadCertificateResponse, error) {
-	endpoint := fmt.Sprintf("%s/certificates/%s/download/return?access_key=%s", BaseURL, id, c.apiKey)
+	// include_cross_signed=1 appends the Sectigo R46 cert cross-signed by USERTrust
+	// so older trust stores (e.g. Android predating Sectigo R46) still validate the chain.
+	endpoint := fmt.Sprintf("%s/certificates/%s/download/return?access_key=%s&include_cross_signed=1", BaseURL, id, c.apiKey)
 
 	resp, err := c.httpClient.Get(endpoint)
 	if err != nil {
