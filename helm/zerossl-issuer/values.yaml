@@ -25,6 +25,16 @@ resources:
 # Replica count for the controller deployment
 replicaCount: 1
 
+# Deployment rollout strategy. Empty keeps the Kubernetes default
+# (RollingUpdate). Note that with a single replica, RollingUpdate's default
+# maxSurge of 25% rounds up to 1, so a rollout briefly runs two pods; set
+# type: Recreate to guarantee only one controller runs at a time, which
+# matters when leader election is disabled.
+#
+# updateStrategy:
+#   type: Recreate
+updateStrategy: {}
+
 # Common labels to add to all resources
 commonLabels: {}
   # Example:

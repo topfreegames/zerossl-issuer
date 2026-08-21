@@ -10,6 +10,10 @@ spec:
     matchLabels:
       {{- include "zerossl-issuer.selectorLabels" . | nindent 6 }}
   replicas: {{ .Values.replicaCount }}
+  {{- with .Values.updateStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       annotations:
