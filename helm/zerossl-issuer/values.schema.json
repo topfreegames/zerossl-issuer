@@ -98,6 +98,38 @@
       "minimum": 1,
       "default": 1
     },
+    "updateStrategy": {
+      "type": "object",
+      "description": "Deployment rollout strategy. Empty keeps the Kubernetes default. Use type Recreate to ensure only one controller pod runs at a time.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "Recreate",
+            "RollingUpdate"
+          ]
+        },
+        "rollingUpdate": {
+          "type": "object",
+          "properties": {
+            "maxSurge": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "maxUnavailable": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "commonLabels": {
       "type": "object",
       "description": "Common labels to add to all resources",

@@ -73,6 +73,7 @@ zerossl-issuer:
 | `image.tag` | Controller image tag | `latest` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount` | Number of replicas | `1` |
+| `updateStrategy` | Deployment rollout strategy (e.g. `{type: Recreate}`); empty keeps the Kubernetes default | `{}` |
 | `commonLabels` | Labels to add to all resources | `{}` |
 | `resources.limits.cpu` | CPU limits | `500m` |
 | `resources.limits.memory` | Memory limits | `128Mi` |
